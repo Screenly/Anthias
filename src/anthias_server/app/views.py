@@ -2422,6 +2422,46 @@ def settings_save(request: HttpRequest) -> HttpResponse:
     return redirect(reverse('anthias_app:settings'))
 
 
+def _device_keys_refusal(request: HttpRequest) -> str:
+    """Why the device keys can't be exported now, or ''.
+
+    The keys can stand in for this device (and, on a controller, sign
+    certificates every managed screen trusts), so exporting them needs
+    authentication turned on and the operator's current password, not
+    just a session someone may have left open.
+    """
+    if not settings['auth_backend']:
+        return 'turn on authentication before exporting the device keys.'
+    from anthias_server.lib.auth import _persisted_operator
+
+    operator = _persisted_operator()
+    current = request.POST.get('current_password', '')
+    if operator is None or not current or not operator.check_password(current):
+        return 'the current password is incorrect.'
+    return ''
+
+
+def _audit_key_export(request: HttpRequest, outcome: str, detail: str) -> None:
+    """Record a device-key export attempt in the audit log."""
+    from anthias_server.controller import service
+
+    user = getattr(request, 'user', None)
+    actor = user.get_username() if user and user.is_authenticated else ''
+    try:
+        service.audit(
+            'key export',
+            outcome,
+            node_name=str(settings['player_name'] or ''),
+            detail=detail,
+            actor=actor,
+        )
+    except Exception:
+        # The audit row is best effort; keep the attempt in the log.
+        logger.exception(
+            'Could not audit the device key export (%s: %s)', outcome, detail
+        )
+
+
 @authorized
 @require_http_methods(['POST'])
 def settings_backup(request: HttpRequest) -> HttpResponseBase:
@@ -2443,6 +2483,11 @@ def settings_backup(request: HttpRequest) -> HttpResponseBase:
     """
     device_keys = None
     if _checkbox(request, 'include_keys'):
+        refusal = _device_keys_refusal(request)
+        if refusal:
+            _audit_key_export(request, 'refused', refusal)
+            messages.error(request, f'Backup not created: {refusal}')
+            return redirect(reverse('anthias_app:settings') + '#backup')
         # Opt-in and always encrypted: see lib.identity_backup.
         from anthias_server.lib import identity_backup
 
@@ -2454,7 +2499,7 @@ def settings_backup(request: HttpRequest) -> HttpResponseBase:
         except identity_backup.IdentityBackupError as exc:
             messages.error(request, f'Backup not created: {exc}')
             return redirect(reverse('anthias_app:settings') + '#backup')
-        logger.info('Backup includes the device keys (encrypted)')
+        _audit_key_export(request, 'ok', 'device keys exported (encrypted)')
     filename = backup_helper.backup_archive_name(settings['player_name'])
     response = StreamingHttpResponse(
         backup_helper.astream_backup(device_keys),

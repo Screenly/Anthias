@@ -78,6 +78,48 @@ def test_recover(backup_home: str) -> None:
     assert not path.isfile(file_path)
 
 
+@pytest.mark.django_db
+def test_recover_revokes_restored_tokens_and_pairings(
+    backup_home: str,
+) -> None:
+    from django.contrib.auth.models import User
+
+    from anthias_server.app.models import ApiToken, ManagementController
+    from anthias_server.lib import api_tokens, management
+
+    user = User.objects.create_user(
+        username='op', password='pw-for-tests'
+    )  # NOSONAR
+    with mock.patch.object(api_tokens, 'tokens_enabled', return_value=True):
+        token, _ = api_tokens.create_token(user, 'script')
+        ctoken, _ = api_tokens.create_token(user, 'Controller: Lobby')
+    ManagementController.objects.create(
+        name='Lobby', url='https://c:8443', fingerprint='c' * 64, token=ctoken
+    )
+    with (
+        mock.patch.object(management, 'apply_caddy', return_value=True),
+        mock.patch.object(management, '_set_management_enabled'),
+    ):
+        backup_helper._forget_restored_credentials()
+    assert not ApiToken.objects.filter(revoked_at__isnull=True).exists()
+    assert not ManagementController.objects.exists()
+    token.refresh_from_db()
+    assert token.revoked_at is not None
+
+
+def test_recover_forgets_credentials_only_when_a_database_came_back(
+    backup_home: str,
+) -> None:
+    archive_name = create_backup()
+    file_path = path.join(backup_home, static_dir, archive_name)
+    with mock.patch.object(
+        backup_helper, '_forget_restored_credentials'
+    ) as forget:
+        recover(file_path)
+    # The fixture home has no database, so nothing was restored.
+    forget.assert_not_called()
+
+
 def test_backup_archive_name_falls_back_on_empty_name() -> None:
     dt = datetime(2016, 7, 19, 12, 42, 12, tzinfo=UTC)
     with mock.patch(

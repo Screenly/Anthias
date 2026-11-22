@@ -15,7 +15,12 @@
                 {
                   "handler": "reverse_proxy",
                   "upstreams": [{"dial": "anthias-server:8080"}],
-                  "headers": {"request": {"delete": ["X-Anthias-Listener"]}}
+                  "headers": {
+                    "request": {
+                      "set": {"X-Anthias-Listener": ["ui"]},
+                      "delete": ["X-Anthias-Client-Cert"]
+                    }
+                  }
                 }
               ]
             }

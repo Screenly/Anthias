@@ -140,17 +140,17 @@ When **Authentication** is turned on in Settings, scripts and other devices shou
 3. Send it in the `Authorization` header:
 
 ```bash
-$ curl -H 'Authorization: Bearer anthias_…' http://<device-ip>/api/v2/info
+$ curl -H 'Authorization: Bearer anthias_…' https://<device-ip>/api/v2/info
 ```
 
-A token gives full access to the API, the same as the operator account. It can't be used to sign in to the web interface or to create more tokens. To cut off access, click **Revoke** next to the token; anything still using it gets `401 Unauthorized` from then on. Changing your password does not revoke tokens.
+Tokens are only accepted over HTTPS. A request that sends one over plain `http://` gets `401 Unauthorized`; if that happened on a network you don't trust, revoke the token. A token can manage content, playback and the screen through the API, but it can't sign in to the web interface, create more tokens, or create or restore backups (a backup holds the device's secret key and your password hash). Use the web interface for backups. To cut off access, click **Revoke** next to the token; anything still using it gets `401 Unauthorized` from then on. Changing your password does not revoke tokens. Restoring a backup revokes every token and ends multi-screen management, so create the tokens you need again afterwards.
 
 Tokens only apply while authentication is on:
 
 * With **Authentication** set to **Disabled**, the API is open to anyone on your network. You can't create tokens in that mode, because they would not protect anything, and a token sent in a request is ignored.
 * Tokens you created earlier stay listed (and can still be revoked) but are inactive until you turn authentication back on.
 
-HTTP Basic auth (`curl -u user:pass …`) still works for older clients but is deprecated in favor of tokens.
+HTTP Basic auth (`curl -u user:pass …`) still works for older clients but is deprecated in favor of tokens. A backup created through `POST /api/v2/backup` can be downloaded for one hour, by a signed-in operator or with Basic auth.
 
 ### Managing several screens from one (multi-screen)
 

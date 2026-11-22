@@ -8,12 +8,13 @@ import sys
 import tarfile
 import tempfile
 import threading
+import time
 import uuid
 from collections.abc import AsyncGenerator, Generator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from enum import StrEnum
-from os import getenv, makedirs, path, remove
+from os import getenv, listdir, makedirs, path, remove
 from typing import Any
 
 from anthias_common.utils import STAGED_UPLOAD_DIR
@@ -548,6 +549,38 @@ def _upgrade_restored_database() -> None:
         )
 
 
+def _forget_restored_credentials() -> None:
+    """Revoke every API token and drop every controller pairing that
+    came in with a restored database.
+
+    A backup is a copy of the database, token hashes included. Without
+    this, restoring device A's backup onto device B would make A's
+    tokens (and A's controller) valid on B, and a restore could plant a
+    token that survives revoking the one used to upload it. Tokens are
+    cheap to issue again; the operator re-creates the ones they need
+    and re-joins the controller.
+    """
+    try:
+        from django.db import connections
+        from django.utils import timezone
+
+        from anthias_server.app.models import ApiToken, ManagementController
+        from anthias_server.lib import management
+
+        connections.close_all()
+        controllers = list(
+            ManagementController.objects.select_related('token')
+        )
+        ApiToken.objects.filter(revoked_at__isnull=True).update(
+            revoked_at=timezone.now()
+        )
+        if controllers or management.management_enabled():
+            management._revoke_and_forget(controllers)
+        logger.info('Revoked the API tokens carried by the restored backup')
+    except Exception:
+        logger.exception('Revoking restored API tokens failed')
+
+
 # gzip level for backup archives. The bulk of a backup is video/image
 # assets that are already compressed, so the default level 9 burns
 # minutes of single-core CPU on an SBC for ~no size win — measured
@@ -688,6 +721,43 @@ async def astream_backup(
             executor.shutdown(wait=False)
 
 
+# How long an archive written by create_backup() (the REST API path)
+# stays downloadable. The API returns its name for an immediate fetch;
+# leaving archives around indefinitely kept a copy of the secret key
+# and the password hash on disk for anyone who could guess the name.
+BACKUP_ARCHIVE_TTL_S = 60 * 60
+
+
+def archive_expired(file_path: str, now: float | None = None) -> bool:
+    try:
+        mtime = path.getmtime(file_path)
+    except OSError:
+        return False
+    return (now if now is not None else time.time()) - mtime > (
+        BACKUP_ARCHIVE_TTL_S
+    )
+
+
+def prune_archives(directory: str, now: float | None = None) -> int:
+    """Delete expired backup archives in ``directory``. Never raises."""
+    removed = 0
+    try:
+        names = listdir(directory)
+    except OSError:
+        return 0
+    for entry in names:
+        if not entry.endswith('.tar.gz'):
+            continue
+        full = path.join(directory, entry)
+        if path.isfile(full) and archive_expired(full, now):
+            try:
+                remove(full)
+                removed += 1
+            except OSError:
+                logger.warning('Could not remove expired backup %s', full)
+    return removed
+
+
 def create_backup(name: str = default_archive_name) -> str:
     home = getenv('HOME') or ''
     archive_name = backup_archive_name(name)
@@ -695,6 +765,7 @@ def create_backup(name: str = default_archive_name) -> str:
 
     if not path.exists(path.join(home, static_dir)):
         makedirs(path.join(home, static_dir), exist_ok=True)
+    prune_archives(path.join(home, static_dir))
 
     if path.isfile(file_path):
         remove(file_path)
@@ -893,6 +964,8 @@ def recover(file_path: str, keys_password: str | None = None) -> KeysRestore:
     # The archive may hold an older schema; migrate the restored
     # database up to what this system expects.
     _upgrade_restored_database()
+    if restored_dbs:
+        _forget_restored_credentials()
 
     if key_files:
         identity_backup.install(key_files)

@@ -305,6 +305,51 @@ if [[ "$MODE" = "pull" ]]; then
     fi
 fi
 
+# anthias-caddy publishes host ports 443 (HTTPS) and 8443 (the
+# multi-screen machine-to-machine API) on every install, as well as 80.
+# Releases before built-in HTTPS published only 80, so an x86 host that
+# already runs a web server or VPN on 443 or 8443 would fail to start
+# Caddy, and with it the whole web interface. Say so up front, with the
+# owner where we can tell, instead of leaving only a compose error.
+# A warning, not a failure: the operator may be about to free the port,
+# and the bring-up below reports the real error if it is still taken.
+WEB_PORTS=(443 8443)
+
+# Prints what listens on TCP port $1 on the host, or nothing.
+function port_listener() {
+    local port="$1"
+    if command -v ss >/dev/null 2>&1; then
+        sudo ss -Hltnp "sport = :${port}" 2>/dev/null || true
+    elif command -v netstat >/dev/null 2>&1; then
+        sudo netstat -ltnp 2>/dev/null \
+            | awk -v p=":${port}" '$4 ~ p"$" {print}' || true
+    elif command -v lsof >/dev/null 2>&1; then
+        sudo lsof -nP -iTCP:"${port}" -sTCP:LISTEN 2>/dev/null || true
+    fi
+}
+
+function check_web_ports() {
+    local port listener
+    for port in "${WEB_PORTS[@]}"; do
+        listener="$(port_listener "${port}")"
+        [ -n "${listener}" ] || continue
+        # Our own Caddy (from the release being replaced) holds it:
+        # the bring-up recreates it, so nothing is in the way.
+        if sudo -E docker compose "${COMPOSE_FILES[@]}" \
+            port anthias-caddy "${port}" >/dev/null 2>&1; then
+            continue
+        fi
+        echo "WARNING: host port ${port} is already in use:" >&2
+        echo "${listener}" >&2
+        echo "Anthias's web front end (anthias-caddy) needs ports 80," \
+             "443 and 8443. Free port ${port} (stop or move the service" \
+             "using it), or Anthias's web interface won't start." \
+             "See https://anthias.screenly.io/docs/install/#ports-anthias-uses" >&2
+    done
+}
+
+check_web_ports
+
 # --remove-orphans sweeps containers that linger after a service is
 # renamed or removed from the compose file (e.g. legacy run-NNN sidecar
 # instances left over from earlier `docker compose run` invocations).

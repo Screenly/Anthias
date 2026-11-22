@@ -179,7 +179,10 @@ def test_join_stores_the_screen_after_calling_it_back(
     body = response.json()
     assert body['status'] == 'pending'
     assert body['request_id'] == pending.request_id
-    assert body['check_code'] == pki.check_code(SCREEN_FP)
+    assert body['check_code'] == pki.check_code(
+        secret, CONTROLLER_FP, SCREEN_FP
+    )
+    assert pending.check_code == body['check_code']
     assert body['controller_name'] == 'Head office'
     assert (pending.name, pending.host, pending.port) == (
         'Lobby',
@@ -191,6 +194,12 @@ def test_join_stores_the_screen_after_calling_it_back(
     assert 'anthias_screen_token' not in pending.token_ciphertext
     assert vault.decrypt(pending.token_ciphertext) == 'anthias_screen_token'
     assert pending.csr_pem == _SCREEN_CSR.strip()
+    # The key approval will bind the CSR to: from the pinned certificate.
+    assert pki.same_public_key(
+        pki.load_public_key(pending.public_key_pem), _SCREEN_KEY
+    )
+    # And the controller's certificate, whose key the screen pins.
+    assert body['controller_certificate'] == join.controller_certificate()
     assert screen_ok[0].screen_fp == SCREEN_FP
     assert AuditEntry.objects.get(action='join request').outcome == 'ok'
 
@@ -703,7 +712,8 @@ def test_screens_page_lists_requests_with_their_check_code(
     pending = _pending()
     html = operator_client.get(reverse('controller:screens')).content.decode()
     assert 'Waiting for approval' in html
-    assert pki.check_code(SCREEN_FP) in html
+    assert pending.check_code
+    assert pending.check_code in html
     assert f'btn-approve-{pending.pk}' in html
     assert f'btn-reject-{pending.pk}' in html
 
@@ -737,6 +747,10 @@ def test_approving_issues_a_certificate_for_the_screen_key(
     )
     pki.check_crl(pki.load_crl(call['json']['crl']), authority)
     assert call['json']['controller_name'] == 'Head office'
+    # The screen pins this certificate's key for our client certificate.
+    assert call['json']['controller_certificate'] == (
+        join.controller_certificate()
+    )
     assert node.client_serial == pki.serial_hex(issued.serial_number)
     assert node.client_fingerprint == pki.fingerprint(issued)
     assert pki.same_public_key(
@@ -822,9 +836,141 @@ def test_unanswered_requests_expire_in_housekeeping(
     JoinRequest.objects.filter(pk=pending.pk).update(
         expires_at=timezone.now() - timedelta(minutes=1)
     )
-    tasks._housekeeping()
+    tasks.controller_housekeeping()
     assert not JoinRequest.objects.exists()
     assert [c['path'] for c in screen_calls] == ['/pairing']
+
+
+@pytest.mark.django_db
+def test_a_join_request_never_expires_other_requests(
+    controller_on: None,
+    screen_ok: list[Any],
+    screen_calls: list[dict[str, Any]],
+) -> None:
+    """Rejecting an expired request calls that screen back; an
+    anonymous join must not wait on that."""
+    JoinRequest.objects.create(
+        request_id='old',
+        name='Old',
+        host='10.0.0.9',
+        fingerprint='e' * 64,
+        token_ciphertext=vault.encrypt('t'),
+        csr_pem='',
+        expires_at=timezone.now() - timedelta(minutes=1),
+    )
+    _pending_count_before = JoinRequest.objects.count()
+    response = Client().post(
+        JOIN_URL,
+        _body(join.current_secret(), screen_host='10.0.0.7'),
+        content_type='application/json',
+        headers=M2M,
+    )
+    assert response.status_code == 202
+    assert screen_calls == []
+    assert JoinRequest.objects.count() == _pending_count_before + 1
+
+
+@pytest.mark.django_db
+def test_expired_requests_do_not_count_against_the_cap(
+    controller_on: None,
+    screen_ok: list[Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(join, 'MAX_PENDING', 1)
+    JoinRequest.objects.create(
+        request_id='old',
+        name='Old',
+        host='h',
+        fingerprint='e' * 64,
+        token_ciphertext='',
+        csr_pem='',
+        expires_at=timezone.now() - timedelta(minutes=1),
+    )
+    response = Client().post(
+        JOIN_URL,
+        _body(join.current_secret(), screen_host='10.0.0.7'),
+        content_type='application/json',
+        headers=M2M,
+    )
+    assert response.status_code == 202
+
+
+@pytest.mark.django_db
+def test_an_expired_request_cannot_be_approved(
+    operator_client: Client,
+    controller_on: None,
+    screen_ok: list[Any],
+    screen_calls: list[dict[str, Any]],
+) -> None:
+    pending = _pending()
+    JoinRequest.objects.filter(pk=pending.pk).update(
+        expires_at=timezone.now() - timedelta(minutes=1)
+    )
+    with pytest.raises(join.JoinError) as caught:
+        join.approve(pending)
+    assert caught.value.status == 410
+    assert screen_calls == []
+    assert not Node.objects.exists()
+
+
+@pytest.mark.django_db
+def test_a_request_is_approved_only_once(
+    controller_on: None,
+    screen_ok: list[Any],
+    screen_calls: list[dict[str, Any]],
+) -> None:
+    pending = _pending()
+    # Another approval holds it (a double click, a second tab).
+    JoinRequest.objects.filter(pk=pending.pk).update(
+        approving_until=timezone.now() + timedelta(minutes=1)
+    )
+    with pytest.raises(join.JoinError) as caught:
+        join.approve(pending)
+    assert caught.value.status == 409
+    assert screen_calls == []
+    # A claim left by a crashed approval runs out.
+    JoinRequest.objects.filter(pk=pending.pk).update(
+        approving_until=timezone.now() - timedelta(seconds=1)
+    )
+    join.approve(pending)
+    assert Node.objects.count() == 1
+    with pytest.raises(join.JoinError) as gone:
+        join.approve(pending)
+    assert gone.value.status == 404
+
+
+@pytest.mark.django_db
+def test_a_failed_approval_releases_the_request(
+    controller_on: None,
+    screen_ok: list[Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from anthias_server.controller import client as client_mod
+
+    pending = _pending()
+
+    def unreachable(self: Any, *_a: Any, **_k: Any) -> Any:
+        raise NodeOfflineError('refused')
+
+    monkeypatch.setattr(client_mod.NodeClient, 'request', unreachable)
+    with pytest.raises(join.JoinError):
+        join.approve(pending)
+    assert JoinRequest.objects.get().approving_until is None
+
+
+@pytest.mark.django_db
+def test_housekeeping_leaves_a_request_being_approved(
+    controller_on: None,
+    screen_ok: list[Any],
+    screen_calls: list[dict[str, Any]],
+) -> None:
+    pending = _pending()
+    JoinRequest.objects.filter(pk=pending.pk).update(
+        expires_at=timezone.now() - timedelta(minutes=1),
+        approving_until=timezone.now() + timedelta(minutes=1),
+    )
+    assert join.expire_requests() == 0
+    assert JoinRequest.objects.exists()
 
 
 @pytest.mark.django_db
@@ -863,7 +1009,7 @@ def test_pending_requests_are_capped(
     )
     response = Client().post(
         JOIN_URL,
-        _body(join.current_secret()),
+        _body(join.current_secret(), screen_host='10.0.0.7'),
         content_type='application/json',
         headers=M2M,
     )
@@ -996,8 +1142,22 @@ def test_the_subject_and_role_come_from_the_ca_not_the_csr() -> None:
     )
 
 
-def test_check_code_is_short_and_readable() -> None:
-    assert pki.check_code('abcd1234' + '0' * 56) == 'ABCD-1234'
+def test_check_code_binds_the_secret_and_both_fingerprints() -> None:
+    import re
+
+    code = pki.check_code('secret', 'a' * 64, 'b' * 64)
+    # 12 base32 characters in groups of four.
+    assert re.fullmatch(r'[A-Z2-7]{4}-[A-Z2-7]{4}-[A-Z2-7]{4}', code)
+    assert pki.check_code('secret', 'A' * 64, 'B' * 64) == code
+    others = {
+        pki.check_code('other', 'a' * 64, 'b' * 64),
+        pki.check_code('secret', 'c' * 64, 'b' * 64),
+        pki.check_code('secret', 'a' * 64, 'c' * 64),
+        # The fields cannot be shifted into each other.
+        pki.check_code('secret' + 'a', 'a' * 63, 'b' * 64),
+    }
+    assert code not in others
+    assert len(others) == 4
 
 
 @pytest.mark.parametrize(
@@ -1249,3 +1409,244 @@ def test_screens_page_keeps_headings_and_fingerprints_reachable(
     assert menus
     assert html.count('@keydown.escape=') == menus
     assert html.count('@click.outside=') == menus
+
+
+# hardening: join callback targets, secret expiry, body size, auditing
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('port', [22, 6379, 8080, 443])
+def test_join_only_calls_back_the_management_port(
+    controller_on: None, screen_ok: list[Any], port: int
+) -> None:
+    response = Client().post(
+        JOIN_URL,
+        _body(join.current_secret(), screen_host='10.0.0.7', screen_port=port),
+        content_type='application/json',
+        headers=M2M,
+    )
+    assert response.status_code == 400
+    assert '8443' in response.json()['detail']
+    assert screen_ok == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'host',
+    [
+        'redis',
+        'anthias-server',
+        'localhost',
+        '127.0.0.1',
+        '::1',
+        '169.254.169.254',
+        '0.0.0.0',
+        '::ffff:127.0.0.1',
+    ],
+)
+def test_join_refuses_internal_callback_targets(
+    controller_on: None, screen_ok: list[Any], host: str
+) -> None:
+    response = Client().post(
+        JOIN_URL,
+        _body(join.current_secret(), screen_host=host),
+        content_type='application/json',
+        headers=M2M,
+    )
+    assert response.status_code == 400
+    assert screen_ok == []
+    assert not Node.objects.exists()
+
+
+def test_callback_host_check_resolves_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_getaddrinfo(host: str, *_a: Any, **_k: Any) -> list[Any]:
+        addr = '127.0.0.1' if host == 'sneaky.example.com' else '10.0.0.5'
+        return [(2, 1, 6, '', (addr, 8443))]
+
+    monkeypatch.setattr('socket.getaddrinfo', fake_getaddrinfo)
+    assert not join._allowed_callback_host('sneaky.example.com')
+    assert join._allowed_callback_host('screen.example.com')
+    assert join._allowed_callback_host('192.168.1.20')
+
+
+@pytest.mark.django_db
+def test_internal_host_is_checked_only_after_the_secret(
+    controller_on: None, screen_ok: list[Any]
+) -> None:
+    join.current_secret()
+    with patch.object(join, '_allowed_callback_host') as check:
+        response = Client().post(
+            JOIN_URL,
+            _body('wrong', screen_host='redis'),
+            content_type='application/json',
+            headers=M2M,
+        )
+    assert response.status_code == 403
+    check.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_callback_failure_does_not_leak_the_low_level_reason(
+    controller_on: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from anthias_server.controller import client as client_mod
+
+    def offline(*_a: Any, **_k: Any) -> Any:
+        raise NodeOfflineError(
+            'Cannot reach 10.0.0.9:8443: Connection refused.'
+        )
+
+    monkeypatch.setattr(client_mod.NodeClient, 'json', offline)
+    response = Client().post(
+        JOIN_URL,
+        _body(join.current_secret(), screen_host='10.0.0.9'),
+        content_type='application/json',
+        headers=M2M,
+    )
+    assert response.status_code == 502
+    detail = response.json()['detail']
+    assert 'refused' not in detail.lower()
+    assert '10.0.0.9:8443' in detail
+
+
+@pytest.mark.django_db
+def test_join_secret_expires(
+    controller_on: None, screen_ok: list[Any]
+) -> None:
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    secret = join.current_secret()
+    JoinSecret.objects.update(
+        created_at=timezone.now()
+        - timedelta(seconds=join.JOIN_SECRET_TTL_S + 1)
+    )
+    response = Client().post(
+        JOIN_URL,
+        _body(secret, screen_host='10.0.0.7'),
+        content_type='application/json',
+        headers=M2M,
+    )
+    assert response.status_code == 403
+    assert 'expired' in response.json()['detail']
+    assert screen_ok == []
+    # The Screens page gets fresh join information.
+    fresh = join.current_secret()
+    assert fresh != secret
+    expiry = join.current_expiry()
+    assert expiry is not None and expiry > timezone.now()
+
+
+@pytest.mark.django_db
+def test_oversized_join_body_is_refused_before_parsing(
+    controller_on: None, screen_ok: list[Any]
+) -> None:
+    big = _body(join.current_secret(), screen_host='10.0.0.7')
+    big['screen_name'] = 'x' * (management.JOIN_MAX_BODY_BYTES + 1)
+    with patch.object(join, 'parse_join_request') as parse:
+        response = Client().post(
+            JOIN_URL,
+            big,
+            content_type='application/json',
+            headers=M2M,
+        )
+    assert response.status_code == 413
+    parse.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_anonymous_failures_are_not_audited(
+    controller_on: None, screen_ok: list[Any]
+) -> None:
+    join.current_secret()
+    for body in (_body('wrong'), {'nonsense': True}):
+        Client().post(
+            JOIN_URL, body, content_type='application/json', headers=M2M
+        )
+    assert not AuditEntry.objects.exists()
+
+
+def test_rate_limit_key_groups_ipv6_by_64() -> None:
+    assert join.rate_limit_key('2001:db8::1') == join.rate_limit_key(
+        '2001:db8::ffff:1'
+    )
+    assert join.rate_limit_key('2001:db8::1') != join.rate_limit_key(
+        '2001:db8:0:1::1'
+    )
+    assert join.rate_limit_key('192.168.1.5') == '192.168.1.5'
+    assert join.rate_limit_key('::ffff:192.168.1.5') == '192.168.1.5'
+
+
+@pytest.mark.django_db
+def test_audit_is_pruned_and_sanitised(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(service, 'AUDIT_MAX_ENTRIES', 5)
+    for i in range(8):
+        service.audit('join', 'failed', node_name=f'n{i}', detail='a\nb\x1bc')
+    assert AuditEntry.objects.count() == 5
+    entry = AuditEntry.objects.first()
+    assert entry is not None
+    assert entry.node_name == 'n7'
+    assert entry.detail == 'a b c'
+
+
+def test_vault_replaces_an_empty_key(tmp_path: Path) -> None:
+    path = tmp_path / 'empty.key'
+    path.write_bytes(b'')
+    key = vault._read_or_create_key(str(path))
+    Fernet(key)
+    assert path.read_bytes().strip() == key
+    assert path.stat().st_mode & 0o777 == 0o600
+    # Stable once written.
+    assert vault._read_or_create_key(str(path)) == key
+
+
+def test_vault_creates_a_key_atomically(tmp_path: Path) -> None:
+    path = tmp_path / 'new.key'
+    key = vault._read_or_create_key(str(path))
+    Fernet(key)
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert [p.name for p in tmp_path.iterdir()] == ['new.key']
+
+
+@pytest.mark.django_db
+def test_approval_refuses_a_csr_for_another_key_than_the_joined_one(
+    controller_on: None,
+    screen_ok: list[Any],
+    screen_calls: list[dict[str, Any]],
+) -> None:
+    """The CSR is bound to the key recorded at join, not to itself."""
+    pending = _pending()
+    other = pki.new_key()
+    pending.csr_pem = pki.make_csr(other, SCREEN_FP, pki.ROLE_SCREEN)
+    pending.save()
+
+    with pytest.raises(join.JoinError) as caught:
+        join.approve(pending)
+
+    assert caught.value.status == 400
+    assert screen_calls == []
+    assert not Node.objects.exists()
+    assert JoinRequest.objects.filter(pk=pending.pk).exists()
+
+
+@pytest.mark.django_db
+def test_approval_refuses_a_request_without_a_recorded_key(
+    controller_on: None,
+    screen_ok: list[Any],
+    screen_calls: list[dict[str, Any]],
+) -> None:
+    pending = _pending()
+    JoinRequest.objects.filter(pk=pending.pk).update(public_key_pem='')
+    pending.refresh_from_db()
+
+    with pytest.raises(join.JoinError) as caught:
+        join.approve(pending)
+
+    assert caught.value.status == 409
+    assert screen_calls == []
+    assert not Node.objects.exists()

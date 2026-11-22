@@ -83,6 +83,7 @@ class PairingCertificateViewV2(APIView):
                     'ca_certificate': {'type': 'string'},
                     'crl': {'type': 'string'},
                     'controller_name': {'type': 'string'},
+                    'controller_certificate': {'type': 'string'},
                 },
                 'required': ['certificate', 'ca_certificate', 'crl'],
             }
@@ -115,6 +116,7 @@ class PairingCertificateViewV2(APIView):
                 field('ca_certificate'),
                 field('crl'),
                 field('controller_name'),
+                field('controller_certificate'),
             )
         except management.ManagementError as exc:
             return Response(

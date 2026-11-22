@@ -56,10 +56,14 @@ from __future__ import annotations
 
 import base64
 import binascii
+import contextlib
+import fcntl
 import json
 import logging
 import os
+import tempfile
 import threading
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -86,6 +90,12 @@ M2M_LISTENER_VALUE = 'm2m'
 JOIN_PREFIX = 'anthias-join:'
 JOIN_PATH = '/api/v2/controller/join'
 JOIN_TIMEOUT = (10, 60)
+# Caddy body caps on the m2m site. A join request is a few hundred
+# bytes of JSON; the largest thing a controller sends is one upload
+# chunk (controller.client.UPLOAD_CHUNK_BYTES, 8 MiB) plus multipart
+# overhead.
+JOIN_MAX_BODY_BYTES = 16 * 1024
+M2M_MAX_BODY_BYTES = 16 * 1024 * 1024
 CONTROLLER_TOKEN_PREFIX = 'Controller: '
 MAX_CONTROLLER_NAME_LEN = 80
 MAX_HOST_LEN = 253
@@ -221,10 +231,10 @@ def is_managed() -> bool:
 
 
 def check_code() -> str:
-    """This screen's check code, as the controller shows it."""
-    from anthias_server.lib import pki
-
-    return pki.check_code(node_fingerprint())
+    """The check code of this screen's join request, as the controller
+    shows it next to the request ('' when there is none)."""
+    controller = pending_controller() or current_controller()
+    return controller.check_code if controller is not None else ''
 
 
 def _set_management_enabled(enabled: bool) -> None:
@@ -444,7 +454,19 @@ def join(snippet: str, screen_host: str = '') -> ManagementController:
         apply_caddy()
         raise
 
+    from anthias_server.lib import pki
+
     name = ' '.join(str(confirmed.get('controller_name') or '').split())
+    code = pki.check_code(info.secret, info.fingerprint, own_fp)
+    if confirmed.get('check_code') not in (None, code):
+        # Both sides derive it from the same inputs; a mismatch means
+        # the operator would be comparing different codes.
+        logger.warning(
+            'Join %s: the controller shows a different check code', info.url
+        )
+    pin = controller_pin(
+        confirmed.get('controller_certificate'), info.fingerprint
+    )
     try:
         controller = ManagementController.objects.create(
             name=(name or info.name)[:MAX_CONTROLLER_NAME_LEN],
@@ -453,6 +475,8 @@ def join(snippet: str, screen_host: str = '') -> ManagementController:
             token=token,
             approved=False,
             request_id=str(confirmed.get('request_id') or '')[:64],
+            check_code=code,
+            controller_spki=pin,
         )
     finally:
         _join_in_progress.clear()
@@ -510,13 +534,38 @@ def _managed_files() -> tuple[Path, Path, Path]:
     return client_cert_path(), controller_ca_path(), crl_path()
 
 
+_crl_lock = threading.Lock()
+
+
+@contextlib.contextmanager
+def _crl_file_lock() -> Iterator[None]:
+    """Serialize CRL comparison and replacement across REST/WS workers."""
+    directory = managed_dir()
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with _crl_lock, (directory / '.managed-crl.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
 def _write_public(target: Path, text: str) -> None:
-    tmp = target.with_name(f'.{target.name}.tmp')
-    tmp.write_text(text)
-    # Public material only (certificates, CRL); the key never goes here.
-    # World-readable is intended: no secrets in these files.
-    os.chmod(tmp, 0o644)  # NOSONAR(S2612)
-    os.replace(tmp, target)
+    # Certificate renewal writers also need distinct temporary files.
+    with tempfile.NamedTemporaryFile(
+        mode='w', dir=target.parent, prefix=f'.{target.name}.', delete=False
+    ) as handle:
+        tmp = Path(handle.name)
+        try:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+            # Public material only; the private key never goes here,
+            # so world-readable is intended.
+            os.chmod(tmp, 0o644)  # NOSONAR(S2612)
+            os.replace(tmp, target)
+        finally:
+            tmp.unlink(missing_ok=True)
 
 
 def _node_public_key() -> Any:
@@ -524,6 +573,63 @@ def _node_public_key() -> Any:
 
     identity = node_identity.ensure_node_identity()
     return pki.load_key(identity.key_path.read_bytes()).public_key()
+
+
+def controller_pin(certificate: Any, fingerprint: str) -> str:
+    """The key pin of the controller certificate ``certificate``.
+
+    ``certificate`` is PEM text or DER bytes of the controller's node
+    certificate. It only counts if it hashes to ``fingerprint``, the
+    one this screen pinned from the join information, so whoever
+    delivers it cannot choose the key. Returns '' otherwise.
+    """
+    from cryptography import x509
+
+    from anthias_server.lib import pki
+
+    try:
+        if isinstance(certificate, bytes):
+            cert = x509.load_der_x509_certificate(certificate)
+        elif isinstance(certificate, str) and certificate:
+            cert = pki.load_cert(certificate)
+        else:
+            return ''
+        if pki.fingerprint(cert) != fingerprint.lower():
+            logger.warning(
+                "Ignoring a controller certificate that isn't the pinned one"
+            )
+            return ''
+        return pki.spki_sha256(cert)
+    except ValueError:  # PkiError is a ValueError
+        return ''
+
+
+def learn_controller_pin(certificate: Any) -> bool:
+    """Record the controller's key pin if it is still missing.
+
+    For a screen approved before key pins were recorded: its push
+    connection hands over the certificate the controller presented in
+    a handshake already pinned to the joined fingerprint. Until then,
+    m2m calls from the controller are refused. True if a pin was stored.
+    """
+    from anthias_server.app.models import ManagementController
+
+    controller = current_controller() or pending_controller()
+    if controller is None or controller.controller_spki:
+        return False
+    pin = controller_pin(certificate, controller.fingerprint)
+    if not pin:
+        return False
+    updated = ManagementController.objects.filter(
+        pk=controller.pk, controller_spki=''
+    ).update(controller_spki=pin)
+    if updated:
+        logger.warning(
+            'Pinned the key of controller %r from its pinned certificate; '
+            'its m2m calls are accepted again',
+            controller.name,
+        )
+    return bool(updated)
 
 
 def controller_ca() -> Any:
@@ -535,18 +641,25 @@ def controller_ca() -> Any:
         return None
 
 
+@_crl_file_lock()
 def install_approval(
     token_id: int,
     certificate: str,
     ca_certificate: str,
     crl: str,
     controller_name: str = '',
+    controller_certificate: str = '',
 ) -> ManagementController:
     """Accept the controller's approval: this screen's certificate.
 
     Only the controller holding the token from our pending request can
     deliver it, over the pinned connection it already uses. Raises
     ManagementError if anything does not check out.
+
+    Once approved, the same call delivers a renewed certificate (the
+    controller's recovery path when the push connection did not
+    renew it). The CA must then be the one already installed, and the
+    CRL is only kept if it is not older than ours.
     """
     from anthias_server.app.models import ManagementController
     from anthias_server.lib import pki
@@ -567,6 +680,29 @@ def install_approval(
         raise ManagementError(f'The approval was not valid: {exc}') from exc
     if cert.serial_number in pki.revoked_serials(revocations):
         raise ManagementError('The certificate delivered is already revoked.')
+    pin = controller_pin(controller_certificate, controller.fingerprint)
+    if pin and not controller.controller_spki:
+        controller.controller_spki = pin
+        controller.save(update_fields=['controller_spki'])
+    if not controller.controller_spki:
+        raise ManagementError(
+            "The approval did not include the controller's pinned "
+            'certificate. Update the controller to the same Anthias '
+            'version as this screen.'
+        )
+    if controller.approved:
+        installed = controller_ca()
+        if installed is None or pki.fingerprint(installed) != (
+            pki.fingerprint(ca)
+        ):
+            raise ManagementError(
+                'The renewed certificate is from a different CA than the '
+                'one this screen was approved with.'
+            )
+        _store_crl(crl)
+        _write_public(client_cert_path(), pki.cert_pem(cert))
+        logger.info('Stored a renewed client certificate (REST)')
+        return controller
     _write_public(controller_ca_path(), pki.cert_pem(ca))
     _write_public(client_cert_path(), pki.cert_pem(cert))
     _write_public(crl_path(), pki.crl_pem(revocations))
@@ -583,6 +719,12 @@ def install_approval(
 
 def store_crl(text: str) -> bool:
     """Keep a newer CRL from the controller. True if it was stored."""
+    with _crl_file_lock():
+        return _store_crl(text)
+
+
+def _store_crl(text: str) -> bool:
+    """Validate and replace while the caller holds the CRL lock."""
     from anthias_server.lib import pki
 
     ca = controller_ca()
@@ -634,7 +776,8 @@ def m2m_caller_allowed(request: Any) -> tuple[bool, str]:
 
     Only enforced once this screen is managed: the caller must present
     a controller certificate from its controller's CA (Caddy already
-    checked the chain) that is valid and not on the CRL. Before that
+    checked the chain) that is valid, not on the CRL, and for the
+    controller key pinned at join (``controller_spki``). Before that
     (joining, waiting for approval) the bearer token is the gate, as
     for any API client. A controller's own :8443 site is not checked
     here; the join endpoint and the push consumer check their callers.
@@ -663,6 +806,18 @@ def m2m_caller_allowed(request: Any) -> tuple[bool, str]:
         return False, 'This screen has no revocation list from its controller.'
     if cert.serial_number in pki.revoked_serials(revocations):
         return False, 'That controller certificate has been revoked.'
+    # Defence in depth on top of the CA: the certificate must also be
+    # for the controller's own key, pinned at join. A certificate made
+    # with a stolen CA key, but for another key pair, is refused.
+    controller = current_controller()
+    pin = controller.controller_spki if controller is not None else ''
+    if not pin:
+        return False, (
+            "This screen has not pinned its controller's key yet. It does "
+            'so the next time it connects to the controller.'
+        )
+    if not pki.spki_matches(cert, pin):
+        return False, "That certificate is not for this screen's controller."
     return True, ''
 
 
@@ -735,30 +890,82 @@ def sync_state() -> None:
 # --- Caddy -----------------------------------------------------------------
 
 
+_LISTENER_SECRET_NAME = 'm2m-listener.secret'
+_listener_lock = threading.Lock()
+_listener_cache: dict[str, str] = {}
+
+
+def listener_value() -> str:
+    """The value Caddy's :8443 site puts in ``X-Anthias-Listener``.
+
+    A random secret kept in the Caddy run volume, which only
+    anthias-server and anthias-caddy mount. A fixed value would let
+    any container on the Docker network (viewer, webview, celery) that
+    can reach ``anthias-server:8080`` directly claim to have come in on
+    :8443. Without the run directory (development, tests) there is no
+    Caddy and no other container, and the plain marker is used.
+    """
+    from anthias_server.lib import caddy
+
+    if not caddy.RUN_DIR.is_dir():
+        return M2M_LISTENER_VALUE
+    path = caddy.RUN_DIR / _LISTENER_SECRET_NAME
+    key = str(path)
+    with _listener_lock:
+        cached = _listener_cache.get(key)
+        if cached:
+            return cached
+        try:
+            secret = path.read_text().strip()
+        except FileNotFoundError:
+            secret = ''
+        if not secret:
+            import secrets as _secrets
+
+            secret = _secrets.token_urlsafe(32)
+            tmp = path.with_name(f'.{path.name}.tmp')
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'w') as f:
+                f.write(secret)
+            os.replace(tmp, path)
+        value = f'{M2M_LISTENER_VALUE}:{secret}'
+        _listener_cache[key] = value
+        return value
+
+
+def reset_listener_cache() -> None:
+    _listener_cache.clear()
+
+
 def m2m_server() -> dict[str, Any]:
     """Caddy JSON for the :8443 API-only site with the node cert.
 
     Caddy's reverse_proxy sets X-Forwarded-For to the peer address,
     which the controller uses as a joining screen's host when the
     operator gave none. The connection limits match the UI sites.
+    Request bodies are capped: the join endpoint is unauthenticated
+    and only ever takes a small JSON object, and nothing else a
+    controller sends is larger than one upload chunk.
     """
     from anthias_server.lib import caddy
 
-    proxy = {
-        'handler': 'reverse_proxy',
-        'upstreams': [{'dial': caddy.UPSTREAM}],
-        'headers': {
-            'request': {
-                'set': {
-                    caddy.LISTENER_HEADER: [M2M_LISTENER_VALUE],
-                    # Empty when the peer sent no client certificate.
-                    caddy.CLIENT_CERT_HEADER: [
-                        '{http.request.tls.client.certificate_der_base64}'
-                    ],
+    def proxy() -> dict[str, Any]:
+        return {
+            'handler': 'reverse_proxy',
+            'upstreams': [{'dial': caddy.UPSTREAM}],
+            'headers': {
+                'request': {
+                    'set': {
+                        caddy.LISTENER_HEADER: [listener_value()],
+                        # Empty when the peer sent no client certificate.
+                        caddy.CLIENT_CERT_HEADER: [
+                            '{http.request.tls.client.certificate_der_base64}'
+                        ],
+                    }
                 }
-            }
-        },
-    }
+            },
+        }
+
     return {
         'listen': [f':{M2M_PORT}'],
         'automatic_https': {'disable': True},
@@ -770,8 +977,13 @@ def m2m_server() -> dict[str, Any]:
         ],
         'routes': [
             {
+                'match': [{'path': [JOIN_PATH]}],
+                'handle': [caddy.body_limit(JOIN_MAX_BODY_BYTES), proxy()],
+                'terminal': True,
+            },
+            {
                 'match': [{'path': ['/api/v2/*']}],
-                'handle': [proxy],
+                'handle': [caddy.body_limit(M2M_MAX_BODY_BYTES), proxy()],
                 'terminal': True,
             },
             {'handle': [{'handler': 'static_response', 'status_code': 404}]},
@@ -851,7 +1063,7 @@ def request_via_m2m(request: Any) -> bool:
     from anthias_server.lib import caddy
 
     value = request.headers.get(caddy.LISTENER_HEADER, '')
-    return hmac.compare_digest(value, M2M_LISTENER_VALUE)
+    return hmac.compare_digest(value.encode(), listener_value().encode())
 
 
 def request_via_ui(request: Any) -> bool:

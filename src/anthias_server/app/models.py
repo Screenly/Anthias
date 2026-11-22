@@ -394,6 +394,14 @@ class ManagementController(models.Model):
     # screen's client certificate (see lib.management.install_approval).
     approved = models.BooleanField(default=False)
     request_id = models.CharField(max_length=64, blank=True, default='')
+    # What the controller shows next to this request (see
+    # lib.pki.check_code), computed here from the join information.
+    check_code = models.CharField(max_length=20, blank=True, default='')
+    # SHA-256 of the controller's public key (SubjectPublicKeyInfo DER;
+    # lib.pki.spki_sha256), from the node certificate that hashes to
+    # ``fingerprint``. On top of its CA, an m2m caller must present a
+    # certificate for this key (lib.management.m2m_caller_allowed).
+    controller_spki = models.CharField(max_length=64, blank=True, default='')
 
     class Meta:
         db_table = 'management_controllers'

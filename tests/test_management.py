@@ -18,22 +18,39 @@ The contract under test (see ``anthias_server.lib.management``):
 from __future__ import annotations
 
 import base64
+import fcntl
 import json
+import os
+import threading
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any, Self
 from unittest.mock import MagicMock
 
 import pytest
 import requests
+from cryptography.hazmat.primitives import serialization
 from django.contrib.auth.models import User
 from django.test import Client
 from django.urls import reverse
 
 from anthias_server.app.models import ApiToken, ManagementController
-from anthias_server.lib import api_tokens, management
+from anthias_server.lib import api_tokens, management, node_identity, pki
 
 _PWD = 'fixture-management-operator-pwd'  # NOSONAR
-CONTROLLER_FP = 'cd' * 32
+
+
+def _controller_identity() -> tuple[str, Any]:
+    cert_pem, key_pem = node_identity.generate()
+    return cert_pem.decode(), pki.load_key(key_pem)
+
+
+# The controller's node certificate (what its 8443 serves and the join
+# information pins) and key, which its client certificates are for.
+CONTROLLER_CERT, CONTROLLER_KEY = _controller_identity()
+CONTROLLER_FP = pki.fingerprint(pki.load_cert(CONTROLLER_CERT))
+_DER = serialization.Encoding.DER
 
 
 @pytest.fixture
@@ -126,6 +143,7 @@ def controller_reply(
                 'request_id': 'rq-1',
                 'check_code': 'ABCD-1234',
                 'controller_name': 'Lobby',
+                'controller_certificate': CONTROLLER_CERT,
             },
         ),
         'calls': [],
@@ -144,7 +162,9 @@ def controller_reply(
     return state
 
 
-def _approve(controller: ManagementController) -> tuple[Any, Any]:
+def _approve(
+    controller: ManagementController, controller_certificate: str = ''
+) -> tuple[Any, Any]:
     """What the controller does when the operator approves: a real
     certificate from a (test) CA, for this screen's node key."""
     from anthias_server.lib import node_identity, pki
@@ -167,6 +187,7 @@ def _approve(controller: ManagementController) -> tuple[Any, Any]:
         pki.cert_pem(ca_cert),
         pki.crl_pem(crl),
         'Lobby',
+        controller_certificate,
     )
     return ca_cert, ca_key
 
@@ -191,7 +212,9 @@ def test_parse_join_info_roundtrip() -> None:
 
 
 def test_parse_join_info_accepts_colon_fingerprint_and_padding() -> None:
-    colon_fp = ':'.join(['CD'] * 32)
+    colon_fp = ':'.join(
+        CONTROLLER_FP[i : i + 2].upper() for i in range(0, 64, 2)
+    )
     data = json.dumps(
         {
             'v': 1,
@@ -482,9 +505,18 @@ def test_m2m_server_shape() -> None:
             'client_authentication': {'mode': 'request'},
         }
     ]
-    api_route, fallback = server['routes']
+    join_route, api_route, fallback = server['routes']
+    assert join_route['match'] == [{'path': ['/api/v2/controller/join']}]
+    assert join_route['handle'][0] == {
+        'handler': 'request_body',
+        'max_size': management.JOIN_MAX_BODY_BYTES,
+    }
     assert api_route['match'] == [{'path': ['/api/v2/*']}]
-    (proxy,) = api_route['handle']
+    limit, proxy = api_route['handle']
+    assert limit == {
+        'handler': 'request_body',
+        'max_size': management.M2M_MAX_BODY_BYTES,
+    }
     assert proxy['handler'] == 'reverse_proxy'
     assert proxy['upstreams'] == [{'dial': 'anthias-server:8080'}]
     assert proxy['headers']['request']['set'] == {
@@ -496,6 +528,37 @@ def test_m2m_server_shape() -> None:
     assert fallback == {
         'handle': [{'handler': 'static_response', 'status_code': 404}]
     }
+
+
+def test_listener_value_is_a_secret_in_the_run_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from anthias_server.lib import caddy
+
+    monkeypatch.setattr(caddy, 'RUN_DIR', tmp_path)
+    management.reset_listener_cache()
+    try:
+        value = management.listener_value()
+        assert value.startswith('m2m:') and len(value) > 30
+        secret_file = tmp_path / 'm2m-listener.secret'
+        assert secret_file.stat().st_mode & 0o777 == 0o600
+        # Stable across calls and restarts (re-read from the file).
+        management.reset_listener_cache()
+        assert management.listener_value() == value
+        proxy = management.m2m_server()['routes'][1]['handle'][1]
+        assert proxy['headers']['request']['set'] == {
+            'X-Anthias-Listener': [value],
+            'X-Anthias-Client-Cert': [
+                '{http.request.tls.client.certificate_der_base64}'
+            ],
+        }
+        request = MagicMock()
+        request.headers = {'X-Anthias-Listener': 'm2m'}
+        assert not management.request_via_m2m(request)
+        request.headers = {'X-Anthias-Listener': value}
+        assert management.request_via_m2m(request)
+    finally:
+        management.reset_listener_cache()
 
 
 @pytest.mark.django_db
@@ -546,11 +609,17 @@ def test_request_via_m2m() -> None:
 def test_api_pairing_get_and_controller_delete(
     operator: User, auth_on: None, controller_reply: dict[str, Any]
 ) -> None:
-    _join_and_approve()
+    controller = management.join(_snippet())
+    ca_cert, ca_key = _approve(controller)
     plaintext = controller_reply['calls'][0]['json']['token']
     client = Client()
     auth = {'Authorization': f'Bearer {plaintext}'}
     url = reverse('api:pairing_v2')
+
+    # The controller's token only works through the :8443 listener,
+    # where a managed screen also wants its controller's certificate.
+    assert client.get(url, headers=auth).status_code == 403
+    auth.update(_der_header(_controller_cert(ca_cert, ca_key)))
 
     response = client.get(url, headers=auth)
     assert response.status_code == 200
@@ -833,12 +902,18 @@ def test_leaving_rewrites_flag_changed_by_another_process(
 
 
 def _controller_cert(
-    ca_cert: Any, ca_key: Any, role: str = 'anthias-controller'
+    ca_cert: Any,
+    ca_key: Any,
+    role: str = 'anthias-controller',
+    key: Any = None,
 ) -> Any:
+    """A client certificate from ``ca``, for the controller's key
+    unless ``key`` says otherwise."""
     from anthias_server.lib import pki
 
+    subject = CONTROLLER_KEY if key is None else key
     return pki.issue_client_cert(
-        ca_cert, ca_key, pki.new_key().public_key(), 'controller', role
+        ca_cert, ca_key, subject.public_key(), CONTROLLER_FP, role
     )
 
 
@@ -893,12 +968,13 @@ def test_controller_delivers_the_certificate_over_the_api(
     auth = {'Authorization': f'Bearer {plaintext}'}
     client = Client()
 
-    # Only on the management port, and only with the controller token.
+    # Only on the management port, and only with the controller token
+    # (which is itself refused off the management port).
     assert (
         client.post(
             url, body, content_type='application/json', headers=auth
         ).status_code
-        == 404
+        == 403
     )
     session = Client()
     session.force_login(operator)
@@ -932,6 +1008,75 @@ def test_controller_delivers_the_certificate_over_the_api(
     assert controller.approved
     assert controller.name == 'Head office'
     assert management.is_managed()
+
+
+@pytest.mark.django_db
+def test_the_check_code_is_derived_from_the_join_information(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    from anthias_server.lib import pki
+
+    controller = management.join(_snippet())
+    expected = pki.check_code(
+        'c2VjcmV0LXNlY3JldA', CONTROLLER_FP, management.node_fingerprint()
+    )
+    assert controller.check_code == expected
+    assert management.check_code() == expected
+
+
+def _renewal(ca_cert: Any, ca_key: Any, number: int) -> tuple[str, str]:
+    from anthias_server.lib import node_identity, pki
+
+    identity = node_identity.ensure_node_identity()
+    node_key = pki.load_key(identity.key_path.read_bytes())
+    cert = pki.issue_client_cert(
+        ca_cert,
+        ca_key,
+        node_key.public_key(),
+        identity.fingerprint,
+        pki.ROLE_SCREEN,
+    )
+    crl = pki.make_crl(ca_cert, ca_key, [], number)
+    return pki.cert_pem(cert), pki.crl_pem(crl)
+
+
+@pytest.mark.django_db
+def test_an_approved_screen_takes_a_renewal_from_its_own_ca(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    from anthias_server.lib import pki
+
+    controller = management.join(_snippet())
+    ca_cert, ca_key = _approve(controller)
+    cert, crl = _renewal(ca_cert, ca_key, 7)
+    management.install_approval(
+        controller.token_id, cert, pki.cert_pem(ca_cert), crl
+    )
+    assert management.client_cert_path().read_text() == cert
+    assert pki.crl_number(management._load_crl()) == 7
+    # An older CRL delivered with a renewal is not kept.
+    older_cert, older_crl = _renewal(ca_cert, ca_key, 3)
+    management.install_approval(
+        controller.token_id, older_cert, pki.cert_pem(ca_cert), older_crl
+    )
+    assert management.client_cert_path().read_text() == older_cert
+    assert pki.crl_number(management._load_crl()) == 7
+
+    # Another CA cannot slip in through a renewal.
+    other_key = pki.new_key()
+    other = pki.make_ca(other_key, 'Other CA')
+    foreign_cert, foreign_crl = _renewal(other, other_key, 9)
+    with pytest.raises(management.ManagementError, match='different CA'):
+        management.install_approval(
+            controller.token_id,
+            foreign_cert,
+            pki.cert_pem(other),
+            foreign_crl,
+        )
+    assert management.client_cert_path().read_text() == older_cert
+    assert pki.fingerprint(management.controller_ca()) == pki.fingerprint(
+        ca_cert
+    )
 
 
 @pytest.mark.django_db
@@ -1007,8 +1152,14 @@ def test_a_managed_screen_accepts_m2m_calls_only_from_its_controller(
         return int(Client().get(url, headers={**auth, **headers}).status_code)
 
     assert status(_der_header(good)) == 200
-    # The UI port is not affected (no listener tag).
-    assert status({}) == 200
+    # A renewed controller certificate (same key, new serial) works.
+    assert status(_der_header(_controller_cert(ca_cert, ca_key))) == 200
+    # The right CA and role, valid and not revoked, but for another key
+    # than the controller's pinned one: refused.
+    forged = _controller_cert(ca_cert, ca_key, key=pki.new_key())
+    assert status(_der_header(forged)) == 403
+    # Off the management port the controller's token is refused outright.
+    assert status({}) == 403
     assert status({'X-Anthias-Listener': 'm2m'}) == 403
     assert status({**_der_header(good), 'X-Anthias-Client-Cert': '!!'}) == 403
     assert (
@@ -1259,3 +1410,182 @@ def test_leaving_from_the_managed_page_asks_first(
     ).content.decode()
     form = html.split('id="btn-managed-leave"')[0].rsplit('<form', 1)[1]
     assert 'confirm(' in form
+
+
+@pytest.mark.django_db
+def test_join_pins_the_controller_key_from_its_pinned_certificate(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    controller = management.join(_snippet())
+    assert controller.controller_spki == pki.spki_sha256(CONTROLLER_KEY)
+
+
+@pytest.mark.django_db
+def test_a_controller_certificate_other_than_the_pinned_one_is_ignored(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    other_cert, _ = _controller_identity()
+    controller_reply['outcome'] = _FakeResponse(
+        202, {'request_id': 'rq-1', 'controller_certificate': other_cert}
+    )
+    controller = management.join(_snippet())
+    assert controller.controller_spki == ''
+
+    # Approval then needs the pinned certificate to come with it.
+    with pytest.raises(management.ManagementError):
+        _approve(controller)
+    controller.refresh_from_db()
+    assert not controller.approved
+    _approve(controller, controller_certificate=CONTROLLER_CERT)
+    controller.refresh_from_db()
+    assert controller.approved
+    assert controller.controller_spki == pki.spki_sha256(CONTROLLER_KEY)
+
+
+@pytest.mark.django_db
+def test_a_screen_without_a_pin_refuses_m2m_until_it_learns_it(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    """A screen approved before key pins: fail closed, then learn the
+    pin from a certificate that hashes to the joined fingerprint."""
+    controller = management.join(_snippet())
+    ca_cert, ca_key = _approve(controller)
+    ManagementController.objects.filter(pk=controller.pk).update(
+        controller_spki=''
+    )
+    plaintext = controller_reply['calls'][0]['json']['token']
+    good = _controller_cert(ca_cert, ca_key)
+
+    def status() -> int:
+        return int(
+            Client()
+            .get(
+                reverse('api:pairing_v2'),
+                headers={
+                    'Authorization': f'Bearer {plaintext}',
+                    **_der_header(good),
+                },
+            )
+            .status_code
+        )
+
+    assert status() == 403
+    # Not from a certificate other than the pinned one.
+    other_cert, _ = _controller_identity()
+    assert not management.learn_controller_pin(
+        pki.load_cert(other_cert).public_bytes(_DER)
+    )
+    assert status() == 403
+    der = pki.load_cert(CONTROLLER_CERT).public_bytes(_DER)
+    assert management.learn_controller_pin(der)
+    assert status() == 200
+    # Learned once; a pin already there is never replaced.
+    assert not management.learn_controller_pin(der)
+
+
+@pytest.mark.parametrize('first_number', [2, 3])
+def test_concurrent_crl_updates_preserve_the_newest_revocations(
+    monkeypatch: pytest.MonkeyPatch, first_number: int
+) -> None:
+    key = pki.new_key()
+    ca = pki.make_ca(key, 'Concurrent CRL fixture')
+    monkeypatch.setattr(management, 'controller_ca', lambda: ca)
+    target = management.crl_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(pki.crl_pem(pki.make_crl(ca, key, [], 1)))
+    texts = {
+        2: pki.crl_pem(pki.make_crl(ca, key, [], 2)),
+        3: pki.crl_pem(pki.make_crl(ca, key, [(123, pki.now())], 3)),
+    }
+    writing = threading.Event()
+    release = threading.Event()
+    attempted = threading.Event()
+    finished = threading.Event()
+    write = management._write_public
+
+    def held_write(path: Path, text: str) -> None:
+        if text == texts[first_number]:
+            writing.set()
+            assert release.wait(3)
+        write(path, text)
+
+    def second_update() -> bool:
+        attempted.set()
+        try:
+            return management.store_crl(texts[5 - first_number])
+        finally:
+            # Without the lock the second update finishes while the first
+            # still holds an obsolete comparison result.
+            finished.set()
+            release.set()
+
+    monkeypatch.setattr(management, '_write_public', held_write)
+    with ThreadPoolExecutor(2) as pool:
+        first = pool.submit(management.store_crl, texts[first_number])
+        assert writing.wait(3)
+        second = pool.submit(second_update)
+        assert attempted.wait(3)
+        # A competing unlocked writer would finish and release the first
+        # here, deterministically rolling back one of these two orders.
+        finished.wait(0.2)
+        release.set()
+        assert first.result(timeout=3)
+        assert second.result(timeout=3) == (first_number == 2)
+    stored = management._load_crl()
+    assert pki.crl_number(stored) == 3
+    assert 123 in pki.revoked_serials(stored)
+
+
+def test_concurrent_certificate_writes_use_distinct_temporary_files(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = management.client_cert_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    replace = os.replace
+    barrier = threading.Barrier(2)
+    sources: list[Path] = []
+
+    def synchronized(source: Path, dest: Path) -> None:
+        sources.append(source)
+        barrier.wait(timeout=3)
+        replace(source, dest)
+
+    monkeypatch.setattr(os, 'replace', synchronized)
+    with ThreadPoolExecutor(2) as pool:
+        first = pool.submit(management._write_public, target, 'first')
+        second = pool.submit(management._write_public, target, 'second')
+        first.result(timeout=3)
+        second.result(timeout=3)
+    assert len(set(sources)) == 2
+    assert target.read_text() in {'first', 'second'}
+    assert all(not source.exists() for source in sources)
+
+
+def test_crl_update_waits_for_an_independent_file_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A separate open-file description models another process's flock."""
+    key = pki.new_key()
+    ca = pki.make_ca(key, 'File lock fixture')
+    monkeypatch.setattr(management, 'controller_ca', lambda: ca)
+    directory = management.managed_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    read = threading.Event()
+    load = management._load_crl
+
+    def observed_load() -> Any:
+        read.set()
+        return load()
+
+    monkeypatch.setattr(management, '_load_crl', observed_load)
+    text = pki.crl_pem(pki.make_crl(ca, key, [], 1))
+    with (directory / '.managed-crl.lock').open('a') as other_process:
+        fcntl.flock(other_process, fcntl.LOCK_EX)
+        with ThreadPoolExecutor(1) as pool:
+            future = pool.submit(management.store_crl, text)
+            try:
+                assert not read.wait(0.2)
+            finally:
+                fcntl.flock(other_process, fcntl.LOCK_UN)
+            assert future.result(timeout=3)
+    assert read.is_set()

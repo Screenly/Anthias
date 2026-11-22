@@ -163,6 +163,47 @@ def test_node_certificate_is_long_lived_ecdsa_p256() -> None:
     assert lifetime >= datetime.timedelta(days=3650)
 
 
+def test_node_identity_is_kept_on_a_read_error() -> None:
+    first = node_identity.ensure_node_identity()
+    real_read = Path.read_bytes
+
+    def flaky(self: Path) -> bytes:
+        if self == first.key_path:
+            raise OSError(5, 'Input/output error')
+        return real_read(self)
+
+    with (
+        mock.patch.object(Path, 'read_bytes', flaky),
+        pytest.raises(OSError, match='Input/output'),
+    ):
+        node_identity.ensure_node_identity()
+    # Nothing was regenerated behind the controllers' backs.
+    assert node_identity.fingerprint() == first.fingerprint
+
+
+def test_concurrent_first_boot_generates_one_identity() -> None:
+    results: list[str] = []
+    barrier = threading.Barrier(4)
+
+    def worker() -> None:
+        barrier.wait()
+        results.append(node_identity.ensure_node_identity().fingerprint)
+
+    threads = [threading.Thread(target=worker) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+    assert len(set(results)) == 1
+    assert node_identity.fingerprint() == results[0]
+    leftovers = [
+        p.name
+        for p in node_identity.node_dir().iterdir()
+        if p.name not in ('cert.pem', 'key.pem', '.lock')
+    ]
+    assert leftovers == []
+
+
 def test_node_identity_replaces_a_key_that_does_not_match() -> None:
     first = node_identity.ensure_node_identity()
     _, other_key = _self_signed()
@@ -631,14 +672,56 @@ def test_ui_proxies_tag_the_listener_and_strip_the_client_cert() -> None:
     }
 
 
-def test_edge_limits_leave_bodies_unbounded() -> None:
-    for server in _servers(caddy.build_config()).values():
+def test_edge_limits_cap_only_small_body_routes() -> None:
+    servers = _servers(caddy.build_config())
+    for server in servers.values():
         assert server['read_header_timeout'] == '10s'
         assert server['idle_timeout'] == '30s'
         assert server['protocols'] == ['h1', 'h2']
         assert 'read_timeout' not in server
         assert 'write_timeout' not in server
-    assert 'request_body' not in json.dumps(caddy.build_config())
+    # :80 carries /api/* uploads, so it has no body cap at all.
+    assert 'request_body' not in json.dumps(servers['anthias_http'])
+    small, rest = servers['anthias_web']['routes']
+    assert small['match'] == [{'path': list(caddy.SMALL_BODY_PATHS)}]
+    assert '/settings/certificate/*' in caddy.SMALL_BODY_PATHS
+    assert {
+        'handler': 'request_body',
+        'max_size': caddy.SMALL_BODY_MAX_BYTES,
+    } in small['handle']
+    assert small['terminal'] is True
+    # Everything else (asset uploads, backups) stays unbounded.
+    assert all(h['handler'] != 'request_body' for h in rest['handle'])
+    assert rest['handle'][-1]['handler'] == 'reverse_proxy'
+
+
+def _response_headers(server: dict[str, Any]) -> dict[str, list[str]]:
+    (headers,) = [
+        h for h in server['routes'][-1]['handle'] if h['handler'] == 'headers'
+    ]
+    result: dict[str, list[str]] = headers['response']['set']
+    return result
+
+
+def test_ui_sends_csp_and_no_hsts_on_the_default_certificate() -> None:
+    web = _servers(caddy.build_config())['anthias_web']
+    headers = _response_headers(web)
+    assert "frame-ancestors 'none'" in headers['Content-Security-Policy'][0]
+    assert 'Strict-Transport-Security' not in headers
+
+
+def test_hsts_only_with_a_certificate_browsers_trust() -> None:
+    state = web_certificate.WebTlsState(
+        mode=web_certificate.MODE_ACME, domain='screen.example.com'
+    )
+    web = _servers(caddy.build_config(state))['anthias_web']
+    assert _response_headers(web)['Strict-Transport-Security'] == [
+        caddy.HSTS_VALUE
+    ]
+    # Short, so going back to the self-signed default (or an expired
+    # upload) does not lock browsers out for long.
+    max_age = int(caddy.HSTS_VALUE.split('max-age=')[1].split(';')[0])
+    assert 0 < max_age <= 24 * 60 * 60
 
 
 def test_server_providers_are_merged_and_isolated() -> None:
@@ -676,6 +759,36 @@ def test_bootstrap_config_matches_the_generated_admin_listener() -> None:
         'unix//run/anthias-caddy/admin.sock|0600'
     )
     assert bootstrap['admin']['config'] == {'persist': True}
+
+
+def test_bootstrap_proxy_tags_the_ui_like_the_generated_config() -> None:
+    # Caddy runs bootstrap.json until anthias-server pushes its own
+    # config. If the bootstrap proxy didn't tag requests as the UI, the
+    # managed-screen lockdown wouldn't recognise them and would let them
+    # through, and a client could send its own X-Anthias-Client-Cert.
+    bootstrap = json.loads(
+        (
+            Path(__file__).resolve().parent.parent
+            / 'docker'
+            / 'caddy'
+            / 'bootstrap.json'
+        ).read_text()
+    )
+    servers = bootstrap['apps']['http']['servers']
+    proxies = [
+        handler
+        for server in servers.values()
+        for route in server['routes']
+        for handler in route['handle']
+        if handler['handler'] == 'reverse_proxy'
+    ]
+
+    assert proxies
+    expected = caddy.proxy_handler()['headers']
+    for proxy in proxies:
+        assert proxy['headers'] == expected
+        tagged = proxy['headers']['request']['set']
+        assert tagged[caddy.LISTENER_HEADER] == [caddy.UI_LISTENER_VALUE]
 
 
 def test_stage_certificates() -> None:
@@ -801,6 +914,53 @@ def test_apply_change_keeps_an_accepted_certificate(
 
     assert result.mode == web_certificate.MODE_CUSTOM
     assert len(fake_admin.loads) == 1
+
+
+def test_apply_change_rolls_back_a_change_that_fails_part_way(
+    fake_admin: _FakeAdmin,
+) -> None:
+    cert_pem, key_pem = _self_signed()
+    validated = web_certificate.validate(cert_pem, key_pem)
+
+    def half_written() -> None:
+        web_certificate.install_custom(validated)
+        raise OSError(28, 'No space left on device')
+
+    with pytest.raises(OSError, match='No space'):
+        caddy.apply_change(half_written)
+
+    assert web_certificate.load_state().mode == web_certificate.MODE_DEFAULT
+    assert not web_certificate.cert_path().exists()
+    assert not web_certificate.key_path().exists()
+
+
+def test_apply_change_holds_the_lock_for_the_whole_sequence(
+    fake_admin: _FakeAdmin,
+) -> None:
+    inside = threading.Event()
+    release = threading.Event()
+    order: list[str] = []
+
+    def slow_change() -> None:
+        inside.set()
+        release.wait(5)
+        order.append('first')
+
+    def second() -> None:
+        caddy.apply_change(lambda: order.append('second'))
+
+    first = threading.Thread(target=caddy.apply_change, args=(slow_change,))
+    first.start()
+    assert inside.wait(5)
+    other = threading.Thread(target=second)
+    other.start()
+    other.join(0.3)
+    # The second change waits for the first one's apply to finish.
+    assert order == []
+    release.set()
+    first.join(5)
+    other.join(5)
+    assert order == ['first', 'second']
 
 
 def test_unreachable_caddy_raises_and_rolls_back() -> None:

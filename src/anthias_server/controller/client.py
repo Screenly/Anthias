@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from collections.abc import Iterator
 from mimetypes import guess_type
 from typing import Any, Self
@@ -28,6 +29,11 @@ UPLOAD_READ_TIMEOUT_S = 300
 # whole video in memory. 8 MiB keeps each request short on a Pi 3
 # (about 3 s at the ~2.8 MB/s the spike measured).
 UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024
+# Nothing a screen legitimately returns comes close: the largest body is
+# the asset list. A bigger response is refused rather than buffered.
+MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+ERROR_MESSAGE_MAX = 200
+_monotonic = time.monotonic
 
 
 class NodeError(Exception):
@@ -76,6 +82,15 @@ _ERRNO_RE = re.compile(r'\[Errno -?\d+\] ([^\'"\)\]]+)')
 def _offline_reason(url: str, exc: Exception) -> str:
     """A one-line reason instead of urllib3's nested repr."""
     where = urlsplit(url).netloc
+    if isinstance(
+        exc,
+        (
+            ResponseTooLargeError,
+            ResponseDeadlineError,
+            pinned_http.RequestDeadlineError,
+        ),
+    ):
+        return f'{where}: {exc}'
     if isinstance(exc, requests.exceptions.Timeout):
         return f'{where} did not answer in time.'
     if isinstance(exc, requests.exceptions.InvalidSchema):
@@ -94,16 +109,65 @@ def _offline_reason(url: str, exc: Exception) -> str:
     return message
 
 
+class ResponseTooLargeError(requests.exceptions.ConnectionError):
+    pass
+
+
+class ResponseDeadlineError(requests.exceptions.Timeout):
+    pass
+
+
+def _read_bounded(response: requests.Response, *, deadline: float) -> None:
+    """Read the body into ``response`` with a size cap and a deadline.
+
+    ``requests`` applies the read timeout per socket read, so a screen
+    that drips one byte at a time, or answers with gigabytes, would
+    otherwise hold a worker (or the join request) for as long as it
+    likes and fill the controller's memory.
+    """
+    declared = response.headers.get('Content-Length')
+    try:
+        if declared is not None and int(declared) > MAX_RESPONSE_BYTES:
+            response.close()
+            raise ResponseTooLargeError(
+                'The screen sent a response too large.'
+            )
+    except ValueError:
+        pass
+    chunks: list[bytes] = []
+    total = 0
+    try:
+        for chunk in response.iter_content(64 * 1024):
+            total += len(chunk)
+            if total > MAX_RESPONSE_BYTES:
+                raise ResponseTooLargeError(
+                    'The screen sent a response too large.'
+                )
+            if _monotonic() > deadline:
+                raise ResponseDeadlineError(
+                    'The screen took too long to answer.'
+                )
+            chunks.append(chunk)
+    finally:
+        response.close()
+    response._content = b''.join(chunks)
+
+
 def _error_message(response: requests.Response) -> str:
+    """A short, single-line reason from a screen's error body."""
     try:
         body = response.json()
     except ValueError:
-        return response.text[:200] or response.reason
-    if isinstance(body, dict):
-        for key in ('detail', 'message', 'error'):
-            if isinstance(body.get(key), str):
-                return str(body[key])
-    return str(body)[:200]
+        text = response.text or response.reason or ''
+    else:
+        text = str(body)
+        if isinstance(body, dict):
+            for key in ('detail', 'message', 'error'):
+                if isinstance(body.get(key), str):
+                    text = str(body[key])
+                    break
+    flat = ''.join(c if c.isprintable() else ' ' for c in text)
+    return ' '.join(flat.split())[:ERROR_MESSAGE_MAX]
 
 
 class NodeClient:
@@ -149,15 +213,19 @@ class NodeClient:
         if self.token:
             headers['Authorization'] = f'Bearer {self.token}'
         url = f'{self.base_url}{API_PREFIX}{path}'
+        started = _monotonic()
         try:
-            response = self.session.request(
-                method,
-                url,
-                headers=headers,
-                timeout=timeout,
-                allow_redirects=False,
-                **kwargs,
-            )
+            with pinned_http.request_deadline(sum(timeout)):
+                response = self.session.request(
+                    method,
+                    url,
+                    headers=headers,
+                    timeout=timeout,
+                    allow_redirects=False,
+                    stream=True,
+                    **kwargs,
+                )
+                _read_bounded(response, deadline=started + sum(timeout))
         except requests.exceptions.SSLError as exc:
             if 'fingerprint' in str(exc).lower():
                 raise NodeCertificateError(

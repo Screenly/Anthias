@@ -25,8 +25,12 @@ Messages are JSON objects with a ``type``:
   :data:`HEARTBEAT_S`;
 * ``renew``: ``{"type": "renew", "csr": "<PEM>"}`` when the screen's
   certificate is close to expiry, answered with
-  ``{"type": "certificate", "certificate": "<PEM>"}`` (the old one is
-  revoked).
+  ``{"type": "certificate", "certificate": "<PEM>"}``. At most one per
+  connection, and only when the certificate it connected with is due.
+  The replaced certificate stays valid until the screen first connects
+  with the new one, and is revoked then; a screen that missed the reply
+  and asks again with the old one is sent the same new certificate,
+  not another one.
 
 The controller sends ``{"type": "crl", "crl": "<PEM>"}`` on connect
 and whenever the revocation list changes.
@@ -56,6 +60,7 @@ from django.utils import timezone
 
 from anthias_server.lib import pki
 
+from .ca import CaError
 from .models import Node, NodeStatus
 
 logger = logging.getLogger(__name__)
@@ -116,7 +121,12 @@ def _screen_for(cert: x509.Certificate | None) -> Node | None:
     """The managed screen this client certificate currently belongs to.
 
     It must be a screen certificate from this controller's CA, valid
-    now, not revoked, and the one most recently issued to that screen.
+    now, not revoked, the one most recently issued to that screen (or
+    the one a renewal just replaced, until the screen has used the new
+    one), and for the key the screen proved it holds when it joined
+    (``Node.public_key_pem``). The last check is the key pin on top of
+    the CA: a certificate minted for another key, even with this CA's
+    key, is refused.
     """
     from . import ca
 
@@ -124,32 +134,82 @@ def _screen_for(cert: x509.Certificate | None) -> Node | None:
         return None
     try:
         pki.check_client_cert(cert, ca.ca_cert(), pki.ROLE_SCREEN)
-    except pki.PkiError:
+    except (pki.PkiError, ca.CaError):
         return None
     if ca.is_revoked(pki.serial_hex(cert.serial_number)):
         return None
-    return (
+    fingerprint = pki.fingerprint(cert)
+    node = (
         Node.objects.exclude(status=NodeStatus.UNAUTHORIZED)
-        .filter(client_fingerprint=pki.fingerprint(cert))
+        .filter(
+            Q(client_fingerprint=fingerprint)
+            | Q(previous_client_fingerprint=fingerprint)
+        )
         .first()
     )
+    if node is None:
+        return None
+    try:
+        pin = pki.spki_sha256(node.public_key_pem)
+    except pki.PkiError:
+        logger.warning('Screen %s has no usable key on record', node.pk)
+        return None
+    if not pki.spki_matches(cert, pin):
+        logger.warning(
+            'Refused a certificate for screen %s: not for its joined key',
+            node.pk,
+        )
+        return None
+    return node
 
 
-def _attach(cert: x509.Certificate | None, connection: str) -> int | None:
-    """Mark the screen presenting ``cert`` as connected; its pk."""
+def retire_previous(node: Node) -> None:
+    """The screen connected with its new certificate: revoke the old."""
+    from . import ca
+
+    serial, not_after = (
+        node.previous_client_serial,
+        node.previous_client_not_after,
+    )
+    if not node.previous_client_fingerprint and not serial:
+        return
+    node.previous_client_serial = ''
+    node.previous_client_fingerprint = ''
+    node.previous_client_not_after = None
+    node.save(
+        update_fields=[
+            'previous_client_serial',
+            'previous_client_fingerprint',
+            'previous_client_not_after',
+        ]
+    )
+    if serial:
+        ca.revoke(serial, node.name, 'renewed', not_after)
+
+
+def _attach(
+    cert: x509.Certificate | None, connection: str
+) -> tuple[int, str] | None:
+    """Mark the screen presenting ``cert`` as connected.
+
+    Returns its pk and the fingerprint of the certificate it used.
+    """
     from . import service
 
     if not service.controller_enabled():
         return None
     node = _screen_for(cert)
-    if node is None:
+    if node is None or cert is None:
         return None
+    presented = pki.fingerprint(cert)
     node.push_connection = connection
     node.push_seen_at = timezone.now()
     node.save(update_fields=['push_connection', 'push_seen_at'])
+    if presented == node.client_fingerprint:
+        retire_previous(node)
     if node.status != NodeStatus.UNREACHABLE:
         service._set_status(node, NodeStatus.ONLINE)
-    return node.pk
+    return node.pk, presented
 
 
 def _record(node_id: int, connection: str, message: dict[str, Any]) -> bool:
@@ -205,31 +265,69 @@ def _detach(node_id: int, connection: str) -> None:
     Node.objects.filter(pk=node_id).update(last_checked_at=None)
 
 
-def _renew(node_id: int, connection: str, csr_pem: str) -> dict[str, Any]:
-    """Sign a renewal CSR; revoke the certificate it replaces."""
+def _renew(
+    node_id: int, connection: str, csr_pem: str, presented: str
+) -> dict[str, Any]:
+    """Answer a renewal request on a connection made with ``presented``.
+
+    * With the current certificate, and it is due: sign the CSR. The
+      replaced certificate is kept as the previous one, valid until the
+      screen connects with the new one (``_attach``).
+    * With the previous certificate: the screen missed the reply to an
+      earlier renewal. It gets that certificate again; nothing new is
+      issued, so a screen that keeps asking cannot grow the CRL.
+    * Otherwise it is refused.
+    """
     from . import ca
 
     node = Node.objects.filter(pk=node_id, push_connection=connection).first()
     if node is None or not node.public_key_pem:
         raise pki.PkiError('This screen cannot renew its certificate.')
+    if (
+        presented
+        and presented == node.previous_client_fingerprint
+        and node.client_cert_pem
+    ):
+        logger.info('Re-sending the renewed certificate to screen %s', node_id)
+        return {'type': 'certificate', 'certificate': node.client_cert_pem}
+    if presented != node.client_fingerprint:
+        raise pki.PkiError('That certificate is not the current one.')
+    if node.client_not_after is not None and (
+        node.client_not_after - timezone.now() >= pki.RENEW_BEFORE
+    ):
+        raise pki.PkiError('The certificate is not due for renewal yet.')
     issued = ca.sign_screen_csr(
         csr_pem, pki.load_public_key(node.public_key_pem), node.fingerprint
     )
-    previous = (node.client_serial, node.client_not_after)
+    stale = (node.previous_client_serial, node.previous_client_not_after)
+    replace_certificate(node, issued)
+    if stale[0]:
+        # Replaced twice before the screen ever used the middle one.
+        ca.revoke(stale[0], node.name, 'superseded', stale[1])
+    logger.info('Renewed the client certificate of screen %s', node_id)
+    return {'type': 'certificate', 'certificate': pki.cert_pem(issued)}
+
+
+def replace_certificate(node: Node, issued: x509.Certificate) -> None:
+    """Make ``issued`` current, keeping the one it replaces as previous."""
+    node.previous_client_serial = node.client_serial
+    node.previous_client_fingerprint = node.client_fingerprint
+    node.previous_client_not_after = node.client_not_after
     node.client_serial = pki.serial_hex(issued.serial_number)
     node.client_fingerprint = pki.fingerprint(issued)
     node.client_not_after = issued.not_valid_after_utc
+    node.client_cert_pem = pki.cert_pem(issued)
     node.save(
         update_fields=[
             'client_serial',
             'client_fingerprint',
             'client_not_after',
+            'client_cert_pem',
+            'previous_client_serial',
+            'previous_client_fingerprint',
+            'previous_client_not_after',
         ]
     )
-    if previous[0]:
-        ca.revoke(previous[0], node.name, 'renewed', previous[1])
-    logger.info('Renewed the client certificate of screen %s', node_id)
-    return {'type': 'certificate', 'certificate': pki.cert_pem(issued)}
 
 
 def _crl_message() -> dict[str, Any]:
@@ -260,12 +358,21 @@ def _parse(text_data: str | None) -> dict[str, Any] | None:
 class ScreenPushConsumer(AsyncWebsocketConsumer):
     node_id: int | None = None
     connection: str = ''
+    # Fingerprint of the client certificate this connection was made
+    # with, and whether it already asked for a renewal (once only).
+    presented: str = ''
+    renewed: bool = False
 
     async def connect(self) -> None:
         from anthias_server.lib import management
 
+        # The per-install listener secret (see
+        # management.listener_value) proves the connection came through
+        # Caddy's :8443 site, which is also what makes the forwarded
+        # client-certificate header trustworthy.
         listener = _header(self.scope, 'X-Anthias-Listener')
-        if not hmac.compare_digest(listener, management.M2M_LISTENER_VALUE):
+        expected = await database_sync_to_async(management.listener_value)()
+        if not hmac.compare_digest(listener.encode(), expected.encode()):
             await self.close(code=CLOSE_NOT_M2M)
             return
         cert = client_certificate(self.scope)
@@ -273,13 +380,12 @@ class ScreenPushConsumer(AsyncWebsocketConsumer):
             await self.close(code=CLOSE_UNKNOWN_SCREEN)
             return
         self.connection = secrets.token_hex(8)
-        self.node_id = await database_sync_to_async(_attach)(
-            cert, self.connection
-        )
-        if self.node_id is None:
+        attached = await database_sync_to_async(_attach)(cert, self.connection)
+        if attached is None:
             logger.info('Push connection refused: unknown screen')
             await self.close(code=CLOSE_UNKNOWN_SCREEN)
             return
+        self.node_id, self.presented = attached
         await self.accept()
         if self.channel_layer is not None:
             await self.channel_layer.group_add(GROUP, self.channel_name)
@@ -304,15 +410,25 @@ class ScreenPushConsumer(AsyncWebsocketConsumer):
             await self.close(code=CLOSE_BAD_MESSAGE)
             return
         if message.get('type') == 'renew':
+            if self.renewed:
+                logger.warning(
+                    'Ignoring a second renewal request from screen %s',
+                    self.node_id,
+                )
+                return
+            self.renewed = True
             try:
                 reply = await database_sync_to_async(_renew)(
-                    self.node_id, self.connection, str(message.get('csr', ''))
+                    self.node_id,
+                    self.connection,
+                    str(message.get('csr', '')),
+                    self.presented,
                 )
-            except pki.PkiError as exc:
+            except (pki.PkiError, CaError) as exc:
+                # Not fatal: the connection still carries health.
                 logger.warning(
                     'Renewal refused for screen %s: %s', self.node_id, exc
                 )
-                await self.close(code=CLOSE_BAD_MESSAGE)
                 return
             await self._send_json(reply)
             return

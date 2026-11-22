@@ -219,6 +219,11 @@ NORMALIZE_VIDEO_SOFT_TIME_LIMIT_S = (
 # and the Screens page's "Check now" refreshes on demand. Must equal
 # controller.tasks.STATUS_INTERVAL_S (pinned by a test).
 CONTROLLER_STATUS_INTERVAL_S = 300
+# Controller housekeeping (controller.tasks.controller_housekeeping):
+# drop expired join requests, prune revocations, keep the CRL fresh and
+# renew screen certificates the push connection did not. Hourly; every
+# step is cheap when there is nothing to do.
+CONTROLLER_HOUSEKEEPING_INTERVAL_S = 3600
 
 # How often the scheduled display-power tick runs. One minute is the
 # resolution of the schedule itself (times are HH:MM), so a coarser
@@ -363,6 +368,13 @@ def setup_periodic_tasks(sender: Any, **kwargs: Any) -> None:
         CONTROLLER_STATUS_INTERVAL_S,
         sender.signature('anthias_server.controller.tasks.refresh_nodes'),
         name='controller_refresh_nodes',
+    )
+    sender.add_periodic_task(
+        CONTROLLER_HOUSEKEEPING_INTERVAL_S,
+        sender.signature(
+            'anthias_server.controller.tasks.controller_housekeeping'
+        ),
+        name='controller_housekeeping',
     )
 
 
@@ -579,6 +591,14 @@ def send_telemetry_task() -> None:
 
 @celery.task
 def cleanup() -> None:
+    from anthias_server.lib import backup_helper
+
+    # API-created backup archives carry the secret key and password
+    # hash; never leave them on disk past their download window.
+    backup_helper.prune_archives(
+        path.join(getenv('HOME') or '', backup_helper.static_dir)
+    )
+
     asset_dir = settings['assetdir']
     if not path.isdir(asset_dir):
         return

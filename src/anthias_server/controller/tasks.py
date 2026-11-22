@@ -7,8 +7,10 @@ task and never the web UI or the other screens.
 from __future__ import annotations
 
 import logging
+import os
 import secrets
-from datetime import timedelta
+import time
+from datetime import datetime, timedelta
 
 from django.db.models import F, Q
 from django.utils import timezone
@@ -28,6 +30,10 @@ PUBLISH_SOFT_TIME_LIMIT_S = 60 * 30
 PUBLISH_TIME_LIMIT_S = PUBLISH_SOFT_TIME_LIMIT_S + 60
 COMMAND_SOFT_TIME_LIMIT_S = 90
 COMMAND_TIME_LIMIT_S = COMMAND_SOFT_TIME_LIMIT_S + 30
+# Expiring requests calls each screen back (best effort, bounded by the
+# client's deadline), so allow for a few slow ones.
+HOUSEKEEPING_SOFT_TIME_LIMIT_S = 600
+HOUSEKEEPING_TIME_LIMIT_S = HOUSEKEEPING_SOFT_TIME_LIMIT_S + 60
 
 # Status polling is serial and slow on purpose: /info takes about a
 # second on a busy Pi, and screens should not spend their CPU on us.
@@ -52,6 +58,68 @@ STATUS_LOCK_KEY = 'controller:status:lock'
 PUBLISH_RETRY_S = 15
 
 
+# Publishes share the one Celery worker with the display on/off
+# schedule, the asset probes and the rest; its pool is a process per
+# core, so four on a Pi 2/3. "Publish to all" queues one long upload
+# per screen, and without a cap they would take every process and hold
+# the display schedule back by minutes. At most this many publishes
+# run at once (never the whole pool); the others wait in the queue,
+# re-checking every PUBLISH_SLOT_RETRY_S, without holding a process.
+#
+# A cap rather than a queue of their own: a second queue needs a
+# second worker (another process tree on a 1 GB Pi) and a change to
+# the worker command in every compose file, Balena and dev included.
+PUBLISH_MAX_CONCURRENT = 2
+PUBLISH_SLOT_RETRY_S = 20
+PUBLISH_SLOTS_KEY = 'controller:publish:slots'
+
+# Take a slot if fewer than ARGV[2] are held. Slots are members of a
+# sorted set scored by their expiry, so a worker killed mid-publish
+# frees its slot when the task's hard time limit has passed.
+_SLOT_ACQUIRE_LUA = """
+local now = tonumber(ARGV[1])
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now)
+if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[2]) then
+  return 0
+end
+redis.call('ZADD', KEYS[1], now + tonumber(ARGV[3]), ARGV[4])
+redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
+return 1
+"""
+
+
+def _pool_size() -> int:
+    """The worker's process count: Celery's default is one per core."""
+    configured = celery.conf.get('worker_concurrency')
+    return int(configured or os.cpu_count() or 1)
+
+
+def publish_slots() -> int:
+    """How many publishes may run at once on this worker."""
+    pool = _pool_size()
+    # Leave at least one process for everything else.
+    return max(1, min(PUBLISH_MAX_CONCURRENT, pool - 1))
+
+
+def _take_publish_slot(holder: str) -> bool:
+    now = int(time.time())
+    return bool(
+        celery_tasks.r.eval(
+            _SLOT_ACQUIRE_LUA,
+            1,
+            PUBLISH_SLOTS_KEY,
+            now,
+            publish_slots(),
+            PUBLISH_TIME_LIMIT_S,
+            holder,
+        )
+    )
+
+
+def _release_publish_slot(holder: str) -> None:
+    celery_tasks.r.zrem(PUBLISH_SLOTS_KEY, holder)
+
+
 def publish_lock_key(node_id: int) -> str:
     return f'controller:publish:{node_id}:lock'
 
@@ -65,10 +133,16 @@ def publish_to_node(node_id: int, actor: str = '') -> str:
     if node is None:
         return 'screen removed'
     lock_value = secrets.token_hex(8)
+    if not _take_publish_slot(lock_value):
+        publish_to_node.apply_async(
+            (node_id, actor), countdown=PUBLISH_SLOT_RETRY_S
+        )
+        return 'waiting for a publish slot'
     key = publish_lock_key(node_id)
     if not celery_tasks.r.set(
         key, lock_value, nx=True, ex=PUBLISH_TIME_LIMIT_S
     ):
+        _release_publish_slot(lock_value)
         publish_to_node.apply_async(
             (node_id, actor), countdown=PUBLISH_RETRY_S
         )
@@ -86,6 +160,7 @@ def publish_to_node(node_id: int, actor: str = '') -> str:
         raise
     finally:
         celery_tasks.r.eval(celery_tasks._LOCK_RELEASE_LUA, 1, key, lock_value)
+        _release_publish_slot(lock_value)
 
 
 @celery.task(
@@ -110,17 +185,70 @@ def refresh_node(node_id: int) -> str:
     return service.check_node(node).status
 
 
-def _housekeeping() -> None:
-    """Expire unanswered join requests; keep the CRL current."""
+def renewal_due(now: datetime) -> Q:
+    """Screens whose certificate the controller should renew over REST.
+
+    A screen with a live push connection renews over it once fewer than
+    ``pki.RENEW_BEFORE`` days are left; the controller steps in when it
+    has no live connection, or when half that margin has passed and it
+    still has not.
+    """
+    from anthias_server.lib import pki
+
+    soon = now + pki.RENEW_BEFORE
+    sooner = now + pki.RENEW_BEFORE / 2
+    return Q(client_not_after__lt=sooner) | (
+        Q(client_not_after__lt=soon) & ~live_filter(now)
+    )
+
+
+@celery.task(
+    soft_time_limit=COMMAND_SOFT_TIME_LIMIT_S,
+    time_limit=COMMAND_TIME_LIMIT_S,
+)
+def renew_node_certificate(node_id: int) -> str:
+    node = Node.objects.filter(pk=node_id).first()
+    if node is None:
+        return 'screen removed'
+    return service.renew_certificate(node)
+
+
+@celery.task(
+    soft_time_limit=HOUSEKEEPING_SOFT_TIME_LIMIT_S,
+    time_limit=HOUSEKEEPING_TIME_LIMIT_S,
+)
+def controller_housekeeping() -> None:
+    """Hourly upkeep, every step best effort.
+
+    * drop join requests nobody approved in time (the join endpoint
+      does not, so an anonymous caller never waits on it);
+    * prune expired revocations and re-sign the CRL when due;
+    * queue a REST renewal for screens whose certificate is due.
+    """
     from anthias_server.controller import ca, join
 
+    if not service.controller_enabled():
+        return
     try:
         expired = join.expire_requests()
         if expired:
             logger.info('Expired %s join request(s)', expired)
+    except Exception:
+        logger.exception('Could not expire join requests')
+    try:
         ca.refresh_crl()
     except Exception:
-        logger.exception('Controller housekeeping failed')
+        logger.exception('Could not refresh the revocation list')
+    now = timezone.now()
+    due = (
+        Node.objects.exclude(status=NodeStatus.UNAUTHORIZED)
+        .exclude(public_key_pem='')
+        .filter(client_not_after__isnull=False)
+        .filter(renewal_due(now))
+        .values_list('pk', flat=True)
+    )
+    for node_id in due:
+        renew_node_certificate.delay(node_id)
 
 
 @celery.task(
@@ -142,7 +270,6 @@ def refresh_nodes() -> int:
         STATUS_LOCK_KEY, lock_value, nx=True, ex=STATUS_TIME_LIMIT_S
     ):
         return 0
-    _housekeeping()
     checked = 0
     try:
         now = timezone.now()

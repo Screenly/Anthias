@@ -72,6 +72,10 @@ def controller_name(host: str = '') -> str:
     return name[:100]
 
 
+AUDIT_MAX_ENTRIES = 1000
+AUDIT_DETAIL_MAX = 500
+
+
 def audit(
     action: str,
     outcome: str,
@@ -81,12 +85,13 @@ def audit(
     detail: str = '',
     actor: str = '',
 ) -> AuditEntry:
+    detail = clean_text(detail, AUDIT_DETAIL_MAX)
     entry = AuditEntry.objects.create(
         action=action,
         outcome=outcome,
         node=node,
-        node_name=(node.name if node else node_name)[:100],
-        detail=detail[:2000],
+        node_name=clean_text(node.name if node else node_name, 100),
+        detail=detail,
         actor=actor[:150],
     )
     log = logger.info if outcome == 'ok' else logger.warning
@@ -97,6 +102,7 @@ def audit(
         outcome,
         detail,
     )
+    _prune_audit()
     return entry
 
 
@@ -107,8 +113,33 @@ def controller_client_cert() -> tuple[str, str]:
     ``controller.ca``). Issued, or renewed, on demand.
     """
     from anthias_server.controller import ca
+    from anthias_server.controller.client import NodeOfflineError
 
-    return ca.ensure_client_cert()
+    try:
+        return ca.ensure_client_cert()
+    except ca.CaError as exc:
+        # Nothing can be sent to a managed screen without it; the
+        # Screens page shows why (ca.problem()).
+        raise NodeOfflineError(str(exc)) from exc
+
+
+def clean_text(value: str, limit: int) -> str:
+    """One line of printable text, at most ``limit`` characters.
+
+    Audit details carry text a screen sent back, so a hostile screen
+    must not be able to forge extra log lines or flood the log.
+    """
+    flat = ''.join(c if c.isprintable() else ' ' for c in str(value or ''))
+    return ' '.join(flat.split())[:limit]
+
+
+def _prune_audit() -> None:
+    """Keep the newest AUDIT_MAX_ENTRIES rows; the table must not grow
+    without bound on an SD card."""
+    newest = AuditEntry.objects.order_by('-id').values_list('id', flat=True)
+    beyond = list(newest[AUDIT_MAX_ENTRIES : AUDIT_MAX_ENTRIES + 1])
+    if beyond:
+        AuditEntry.objects.filter(id__lte=beyond[0]).delete()
 
 
 def client_for(node: Node) -> NodeClient:
@@ -176,6 +207,67 @@ def remove_node(node: Node, actor: str = '') -> str:
     node.delete()
     audit('remove', outcome, node_name=name, detail=detail, actor=actor)
     return detail
+
+
+def renew_certificate(node: Node, actor: str = '') -> str:
+    """Renew a screen's client certificate over REST (mutual TLS).
+
+    The recovery path for a screen that did not renew over its push
+    connection (no connection, or a lost reply): a certificate for the
+    key bound at join (``Node.public_key_pem``), delivered with
+    ``POST /api/v2/pairing/certificate``. Once the screen has confirmed
+    it stored the new certificate, the one it replaces is revoked. If
+    the delivery fails nothing changes here; the new certificate is
+    referenced nowhere and so is accepted nowhere.
+    """
+    from anthias_server.controller import ca, join
+    from anthias_server.controller.push import (
+        replace_certificate,
+        retire_previous,
+    )
+    from anthias_server.lib import pki
+
+    if not node.public_key_pem:
+        return 'no key on record; the screen has to join again'
+    try:
+        issued = ca.issue_for_screen(node.public_key_pem, node.fingerprint)
+        body = {
+            'certificate': pki.cert_pem(issued),
+            'ca_certificate': ca.ca_pem(),
+            'crl': ca.crl_pem(),
+            'controller_name': controller_name(),
+            'controller_certificate': join.controller_certificate(),
+        }
+    except (pki.PkiError, ca.CaError, OSError) as exc:
+        audit('renew', 'failed', node=node, detail=str(exc), actor=actor)
+        return f'not renewed: {exc}'
+    try:
+        with client_for(node) as client:
+            client.request(
+                'POST',
+                '/pairing/certificate',
+                json=body,
+                timeout=(CONNECT_TIMEOUT_S, STATUS_READ_TIMEOUT_S),
+                expected=(200, 204),
+            )
+    except NodeError as exc:
+        audit('renew', 'failed', node=node, detail=str(exc), actor=actor)
+        return f'not renewed: {exc}'
+    node.refresh_from_db()
+    stale = (node.previous_client_serial, node.previous_client_not_after)
+    replace_certificate(node, issued)
+    if stale[0]:
+        ca.revoke(stale[0], node.name, 'superseded', stale[1])
+    # The screen confirmed it stored the new one: the old one can go.
+    retire_previous(node)
+    audit(
+        'renew',
+        'ok',
+        node=node,
+        detail='client certificate renewed over the management port',
+        actor=actor,
+    )
+    return 'renewed'
 
 
 def check_node(node: Node) -> Node:

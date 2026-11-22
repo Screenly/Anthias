@@ -10,6 +10,8 @@ back out.
 
 import os
 import re
+import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -155,3 +157,89 @@ def test_recovery_does_not_delete_the_libnetwork_store(
         'which risks dropping every user-defined network on the host: '
         f'{offending}'
     )
+
+
+def _port_check_script(lines: list[str]) -> str:
+    """The port-check block, from WEB_PORTS to its call, as a script."""
+    start = next(
+        i for i, line in enumerate(lines) if line == 'WEB_PORTS=(443 8443)'
+    )
+    end = next(i for i, line in enumerate(lines) if line == 'check_web_ports')
+    return '\n'.join(lines[start : end + 1])
+
+
+def _run_port_check(
+    lines: list[str],
+    tmp_path: Path,
+    *,
+    listening: dict[int, str],
+    ours: set[int],
+) -> subprocess.CompletedProcess[str]:
+    stubs = tmp_path
+    # `sudo CMD...` just runs CMD (dropping -E).
+    (stubs / 'sudo').write_text(
+        '#!/bin/bash\n[ "$1" = -E ] && shift\nexec "$@"\n'
+    )
+    cases = '\n'.join(
+        f'  *":{port}"*) echo {owner!r} ;;'
+        for port, owner in listening.items()
+    )
+    (stubs / 'ss').write_text(f'#!/bin/bash\ncase "$*" in\n{cases}\nesac\n')
+    held = ' '.join(str(p) for p in ours)
+    (stubs / 'docker').write_text(
+        '#!/bin/bash\n'
+        f'for p in {held}; do\n'
+        '  [ "${@: -1}" = "$p" ] && [ "${@: -3:1}" = port ] && exit 0\n'
+        'done\nexit 1\n'
+    )
+    for stub in ('sudo', 'ss', 'docker'):
+        (stubs / stub).chmod(0o755)
+    script = 'COMPOSE_FILES=(-f x.yml)\n' + _port_check_script(lines)
+    return subprocess.run(
+        ['bash', '-c', script],
+        env={'PATH': f'{stubs}:/usr/bin:/bin'},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_upgrade_warns_when_another_service_holds_a_web_port(
+    lines: list[str], tmp_path: Path
+) -> None:
+    result = _run_port_check(
+        lines,
+        tmp_path,
+        listening={443: 'LISTEN 0 511 *:443 users:(("nginx",pid=1))'},
+        ours=set(),
+    )
+
+    # A warning, never a failure: the bring-up reports the real error.
+    assert result.returncode == 0
+    assert 'host port 443 is already in use' in result.stderr
+    assert 'nginx' in result.stderr
+    assert '8443' not in result.stderr.split('already in use')[0]
+
+
+def test_upgrade_ignores_ports_held_by_its_own_caddy(
+    lines: list[str], tmp_path: Path
+) -> None:
+    result = _run_port_check(
+        lines,
+        tmp_path,
+        listening={
+            443: 'LISTEN 0 4096 *:443 users:(("docker-proxy",pid=2))',
+            8443: 'LISTEN 0 4096 *:8443 users:(("docker-proxy",pid=3))',
+        },
+        ours={443, 8443},
+    )
+
+    assert result.returncode == 0
+    assert result.stderr == ''
+
+
+def test_upgrade_checks_the_web_ports_before_the_bring_up(
+    lines: list[str],
+) -> None:
+    check = _only_index(lines, re.compile(r'^check_web_ports$'))
+    assert check < min(_indices(lines, BRINGS_STACK_UP))

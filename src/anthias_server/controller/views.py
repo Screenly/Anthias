@@ -77,18 +77,23 @@ def _page_context(request: HttpRequest) -> dict[str, Any]:
     }
     if not context['controller_enabled']:
         return context
+    from anthias_server.controller import ca
+
+    context['ca_problem'] = ca.problem()
     try:
         host = _snippet_host(request)
         context['join_snippet'] = join.build_snippet(
             host, service.controller_name(host)
         )
+        context['join_expires_at'] = join.current_expiry()
     except management.ManagementError as exc:
         logger.warning('Join information unavailable: %s', exc)
         context['join_error'] = (
             f'Join information is not available yet. {exc} Check the '
             'server log.'
         )
-    manifest = build_manifest()
+    # Counts only: no file hashing in the web request.
+    manifest = build_manifest(hash_files=False)
     context['manifest_count'] = len(manifest.items)
     context['manifest_skipped'] = manifest.skipped
     context.update(_nodes_context())

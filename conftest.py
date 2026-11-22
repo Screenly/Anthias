@@ -195,9 +195,41 @@ def _make_fake_redis() -> MagicMock:
                 store.pop(keys[0], None)
                 return 1
             return 0
+        if "'ZREMRANGEBYSCORE'" in script and "'ZADD'" in script:
+            # The publish slot semaphore (controller.tasks): drop
+            # expired slots, then take one if fewer than the cap.
+            key = args[0]
+            now, cap, ttl, holder = args[1:5]
+            zset = store.setdefault(key, {})
+            for member in [m for m, s in zset.items() if s <= int(now)]:
+                zset.pop(member)
+            if len(zset) >= int(cap):
+                return 0
+            zset[holder] = int(now) + int(ttl)
+            return 1
         return None
 
     fake.eval.side_effect = _eval
+
+    def _zadd(key: str, mapping: dict[Any, float]) -> int:
+        zset = store.setdefault(key, {})
+        added = sum(1 for m in mapping if m not in zset)
+        zset.update(mapping)
+        return added
+
+    def _zrem(key: str, *members: Any) -> int:
+        zset = store.get(key) or {}
+        return sum(1 for m in members if zset.pop(m, None) is not None)
+
+    def _zrange(key: str, start: int, end: int) -> list[Any]:
+        zset = store.get(key) or {}
+        ordered = sorted(zset, key=lambda m: zset[m])
+        return ordered[start : None if end == -1 else end + 1]
+
+    fake.zadd.side_effect = _zadd
+    fake.zrem.side_effect = _zrem
+    fake.zcard.side_effect = lambda key: len(store.get(key) or {})
+    fake.zrange.side_effect = _zrange
 
     def _rpush(key: str, *values: Any) -> int:
         bucket = store.setdefault(key, [])

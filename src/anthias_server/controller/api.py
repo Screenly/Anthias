@@ -9,6 +9,7 @@ token in the body is for calling the screen back, not for us.
 
 from __future__ import annotations
 
+import json
 import logging
 
 from drf_spectacular.utils import extend_schema
@@ -64,6 +65,7 @@ class ControllerJoinView(APIView):
                     'request_id': {'type': 'string'},
                     'check_code': {'type': 'string'},
                     'controller_name': {'type': 'string'},
+                    'controller_certificate': {'type': 'string'},
                     'expires_at': {'type': 'string', 'format': 'date-time'},
                 },
             }
@@ -87,16 +89,47 @@ class ControllerJoinView(APIView):
                 },
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
+        # Refuse an oversized body before anything parses it. Caddy caps
+        # it at the edge too; this covers a request that reaches the
+        # server some other way, and a missing or lying length.
         try:
-            join_request = join.parse_join_request(request.data, client_ip)
+            length = int(request.META.get('CONTENT_LENGTH') or 0)
+        except ValueError:
+            length = 0
+        if length > management.JOIN_MAX_BODY_BYTES:
+            return Response(
+                {'detail': 'The join request is too large.'},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+        try:
+            body = request.stream.read(management.JOIN_MAX_BODY_BYTES + 1)
+        except OSError:
+            body = b''
+        if len(body) > management.JOIN_MAX_BODY_BYTES:
+            return Response(
+                {'detail': 'The join request is too large.'},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+        try:
+            data = json.loads(body or b'null')
+        except (ValueError, UnicodeDecodeError):
+            data = None
+        # Requests without a valid secret are not audited: anyone on the
+        # network can send them, and each would otherwise add a row.
+        try:
+            join_request = join.parse_join_request(data, client_ip)
+        except join.JoinError as exc:
+            return Response({'detail': exc.detail}, status=exc.status)
+        try:
             pending, created = join.request_join(join_request)
         except join.JoinError as exc:
-            service.audit(
-                'join',
-                'failed',
-                node_name=client_ip,
-                detail=exc.detail,
-            )
+            if exc.status != status.HTTP_403_FORBIDDEN:
+                service.audit(
+                    'join',
+                    'failed',
+                    node_name=client_ip,
+                    detail=exc.detail,
+                )
             return Response({'detail': exc.detail}, status=exc.status)
         service.audit(
             'join request',
@@ -114,6 +147,9 @@ class ControllerJoinView(APIView):
                 'request_id': pending.request_id,
                 'check_code': pending.check_code,
                 'controller_name': service.controller_name(),
+                # Its key is the pin the screen keeps for this
+                # controller's client certificate.
+                'controller_certificate': join.controller_certificate(),
                 'expires_at': pending.expires_at.isoformat(),
             },
             status=status.HTTP_202_ACCEPTED,

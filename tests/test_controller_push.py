@@ -231,6 +231,39 @@ def test_push_is_refused_without_m2m_listener_or_a_current_certificate(
 
 
 @pytest.mark.django_db
+def test_push_wants_the_per_install_listener_secret(
+    controller_on: None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With a Caddy run directory, the bare 'm2m' marker is not enough:
+    another container on the Docker network could send it and claim a
+    forwarded client certificate."""
+    _node()
+    monkeypatch.setattr(caddy, 'RUN_DIR', tmp_path)
+    management.reset_listener_cache()
+    try:
+        secret = management.listener_value()
+
+        async def refused() -> None:
+            verdict = await _connect(_communicator(_headers()))
+            assert verdict == {
+                'type': 'websocket.close',
+                'code': controller_push.CLOSE_NOT_M2M,
+            }
+
+        _run(refused)
+
+        async def accepted() -> None:
+            verdict = await _connect(_communicator(_headers(listener=secret)))
+            assert verdict['type'] == 'websocket.accept'
+
+        _run(accepted)
+    finally:
+        management.reset_listener_cache()
+
+
+@pytest.mark.django_db
 def test_push_is_refused_when_controller_mode_is_off(
     _isolated_settings_conf: None,
 ) -> None:
@@ -294,65 +327,161 @@ def test_push_lifecycle_online_health_heartbeat_offline(
     assert node.last_checked_at is None
 
 
+def _due(node: Node) -> None:
+    """Make the node's current certificate due for renewal."""
+    Node.objects.filter(pk=node.pk).update(
+        client_not_after=timezone.now() + timedelta(days=10)
+    )
+
+
+async def _renew_once(
+    cert: x509.Certificate, key: Any, fingerprint: str
+) -> list[dict[str, Any]]:
+    """Connect with ``cert``, ask once for a renewal; the replies."""
+    replies: list[dict[str, Any]] = []
+    communicator = _communicator(_headers(cert=cert))
+    assert (await _connect(communicator))['type'] == 'websocket.accept'
+    csr = pki.make_csr(key, fingerprint, pki.ROLE_SCREEN)
+    await _send(communicator, {'type': 'renew', 'csr': csr})
+    if not await communicator.receive_nothing(timeout=1):
+        out = await communicator.receive_output(timeout=5)
+        replies.append(json.loads(out['text']))
+    await _close(communicator)
+    return replies
+
+
 @pytest.mark.django_db
 def test_a_screen_renews_its_certificate_over_the_push_connection(
     controller_on: None,
 ) -> None:
+    """The old certificate stays valid until the new one is used."""
     from anthias_server.controller import ca
-    from anthias_server.controller.models import RevokedCertificate
 
     node = _node()
-    old_serial, key = node.client_serial, _LAST['key']
+    _due(node)
+    old_cert, key = _LAST['cert'], _LAST['key']
+    old_serial = node.client_serial
     replies: list[dict[str, Any]] = []
+    crls: list[str] = []
 
     async def body() -> None:
-        communicator = _communicator(_headers())
-        assert (await _connect(communicator))['type'] == 'websocket.accept'
-        csr = pki.make_csr(key, node.fingerprint, pki.ROLE_SCREEN)
-        await _send(communicator, {'type': 'renew', 'csr': csr})
-        for _ in range(2):
-            out = await communicator.receive_output(timeout=5)
-            replies.append(json.loads(out['text']))
-        await _close(communicator)
+        replies.extend(await _renew_once(old_cert, key, node.fingerprint))
 
     _run(body)
 
-    kinds = sorted(r['type'] for r in replies)
-    # The certificate, and the CRL that now lists the replaced one.
-    assert kinds == ['certificate', 'crl']
-    issued = pki.load_cert(
-        next(r for r in replies if r['type'] == 'certificate')['certificate']
-    )
+    assert [r['type'] for r in replies] == ['certificate']
+    issued = pki.load_cert(replies[0]['certificate'])
     pki.check_client_cert(issued, ca.ca_cert(), pki.ROLE_SCREEN, key)
     node.refresh_from_db()
     assert node.client_serial == pki.serial_hex(issued.serial_number)
     assert node.client_fingerprint == pki.fingerprint(issued)
-    assert RevokedCertificate.objects.filter(serial=old_serial).exists()
-    crl = pki.load_crl(next(r for r in replies if r['type'] == 'crl')['crl'])
-    assert int(old_serial, 16) in set(pki.revoked_serials(crl))
+    assert node.client_cert_pem == replies[0]['certificate']
+    # Not revoked yet: the reply could have been lost on the way.
+    assert node.previous_client_serial == old_serial
+    assert not ca.is_revoked(old_serial)
+
+    async def reconnect() -> None:
+        communicator = _communicator(_headers(cert=issued))
+        await communicator.send_input({'type': 'websocket.connect'})
+        assert (await communicator.receive_output(timeout=5))[
+            'type'
+        ] == 'websocket.accept'
+        out = await communicator.receive_output(timeout=5)
+        crls.append(json.loads(out['text'])['crl'])
+        await _close(communicator)
+
+    _run(reconnect)
+
+    # The screen came back with the new one: the old one is revoked,
+    # and the CRL it is sent on connect already lists it.
+    assert ca.is_revoked(old_serial)
+    assert int(old_serial, 16) in pki.revoked_serials(pki.load_crl(crls[0]))
+    node.refresh_from_db()
+    assert node.previous_client_serial == ''
+    assert node.previous_client_fingerprint == ''
+
+
+@pytest.mark.django_db
+def test_a_lost_renewal_reply_is_sent_again_not_reissued(
+    controller_on: None,
+) -> None:
+    from anthias_server.controller.models import RevokedCertificate
+
+    node = _node()
+    _due(node)
+    old_cert, key = _LAST['cert'], _LAST['key']
+    first: list[dict[str, Any]] = []
+    again: list[dict[str, Any]] = []
+
+    async def body() -> None:
+        first.extend(await _renew_once(old_cert, key, node.fingerprint))
+        # The screen never stored it and still has the old one.
+        again.extend(await _renew_once(old_cert, key, node.fingerprint))
+
+    _run(body)
+
+    assert first[0]['certificate'] == again[0]['certificate']
+    node.refresh_from_db()
+    assert node.client_cert_pem == first[0]['certificate']
+    assert not RevokedCertificate.objects.exists()
+
+
+@pytest.mark.django_db
+def test_renewal_is_once_per_connection_and_only_when_due(
+    controller_on: None,
+) -> None:
+    from anthias_server.controller.models import RevokedCertificate
+
+    node = _node()
+    serial = node.client_serial
+    cert, key = _LAST['cert'], _LAST['key']
+    replies: list[dict[str, Any]] = []
+
+    async def not_due() -> None:
+        replies.extend(await _renew_once(cert, key, node.fingerprint))
+
+    _run(not_due)
+    assert replies == []
+    node.refresh_from_db()
+    assert node.client_serial == serial
+
+    _due(node)
+    outputs: list[dict[str, Any]] = []
+
+    async def twice() -> None:
+        communicator = _communicator(_headers(cert=cert))
+        assert (await _connect(communicator))['type'] == 'websocket.accept'
+        for _ in range(3):
+            csr = pki.make_csr(key, node.fingerprint, pki.ROLE_SCREEN)
+            await _send(communicator, {'type': 'renew', 'csr': csr})
+        outputs.append(await communicator.receive_output(timeout=5))
+        assert await communicator.receive_nothing(timeout=0.5)
+        await _close(communicator)
+
+    _run(twice)
+
+    assert [json.loads(o['text'])['type'] for o in outputs] == ['certificate']
+    assert not RevokedCertificate.objects.exists()
 
 
 @pytest.mark.django_db
 def test_a_renewal_for_another_key_is_refused(controller_on: None) -> None:
     node = _node()
+    _due(node)
     serial = node.client_serial
-    closed: dict[str, Any] = {}
+    replies: list[dict[str, Any]] = []
 
     async def body() -> None:
-        communicator = _communicator(_headers())
-        assert (await _connect(communicator))['type'] == 'websocket.accept'
-        csr = pki.make_csr(pki.new_key(), node.fingerprint, pki.ROLE_SCREEN)
-        await _send(communicator, {'type': 'renew', 'csr': csr})
-        closed.update(await communicator.receive_output(timeout=5))
+        replies.extend(
+            await _renew_once(_LAST['cert'], pki.new_key(), node.fingerprint)
+        )
 
     _run(body)
 
-    assert closed == {
-        'type': 'websocket.close',
-        'code': controller_push.CLOSE_BAD_MESSAGE,
-    }
+    assert replies == []
     node.refresh_from_db()
     assert node.client_serial == serial
+    assert node.previous_client_serial == ''
 
 
 @pytest.mark.django_db
@@ -516,7 +645,8 @@ def test_m2m_site_requests_a_client_certificate_and_forwards_it() -> None:
     # Found on the QA rig: with client auth configured Caddy enforces
     # SNI == Host and answers 421, and peers connect by IP (no SNI).
     assert server['strict_sni_host'] is False
-    proxy = server['routes'][0]['handle'][0]
+    # The first handler on each route is its body cap.
+    proxy = server['routes'][0]['handle'][1]
     assert proxy['headers']['request']['set'][caddy.CLIENT_CERT_HEADER] == [
         '{http.request.tls.client.certificate_der_base64}'
     ]
@@ -625,6 +755,8 @@ def test_screen_pushes_hello_then_heartbeat_with_its_client_certificate(
     controller = _Controller(ctl_cert, ctl_key)
     controller.trust(scr_cert)
     monkeypatch.setattr(screen_push, 'HEARTBEAT_S', 0.2)
+    learned: list[bytes] = []
+    monkeypatch.setattr(screen_push, 'learn_pin', learned.append)
     monkeypatch.setattr(screen_push, 'collect_health', lambda: dict(INFO))
     checks = iter([None])
 
@@ -654,6 +786,9 @@ def test_screen_pushes_hello_then_heartbeat_with_its_client_certificate(
     asyncio.run(body())
 
     assert controller.client_fingerprints == [scr_fp]
+    # The screen hands the pinned controller certificate on, so a screen
+    # approved before key pins existed can learn the controller's key.
+    assert [hashlib.sha256(der).hexdigest() for der in learned] == [ctl_fp]
     assert [m['type'] for m in controller.messages] == ['hello', 'heartbeat']
     assert controller.messages[0]['health']['free_space'] == INFO['free_space']
 
@@ -668,6 +803,8 @@ def test_screen_pushes_health_when_a_warning_appears(
     controller = _Controller(ctl_cert, ctl_key)
     controller.trust(scr_cert)
     monkeypatch.setattr(screen_push, 'HEARTBEAT_S', 0.2)
+    learned: list[bytes] = []
+    monkeypatch.setattr(screen_push, 'learn_pin', learned.append)
     readings = iter([INFO, {**INFO, 'free_space': '100.0\xa0MB'}])
     monkeypatch.setattr(
         screen_push, 'collect_health', lambda: dict(next(readings))
@@ -712,6 +849,8 @@ def test_screen_asks_to_renew_a_certificate_close_to_expiry(
     controller.renewed = 'NEW'
     stored: list[str] = []
     monkeypatch.setattr(screen_push, 'HEARTBEAT_S', 0.2)
+    learned: list[bytes] = []
+    monkeypatch.setattr(screen_push, 'learn_pin', learned.append)
     monkeypatch.setattr(screen_push, 'collect_health', lambda: dict(INFO))
 
     def store(pem: str) -> bool:
@@ -747,6 +886,58 @@ def test_screen_asks_to_renew_a_certificate_close_to_expiry(
     csr = pki.load_csr(controller.messages[kinds.index('renew')]['csr'])
     assert csr.subject.rfc4514_string().count(pki.ROLE_SCREEN) == 1
     assert stored == ['NEW']
+
+
+def test_screen_reconnects_when_its_certificate_is_replaced_over_rest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A certificate renewed over REST mid-session (the old one is now
+    revoked) makes the screen reconnect with it, without asking to renew
+    on a connection made with the old certificate."""
+    import dataclasses
+
+    from websockets.asyncio.server import serve
+
+    ctl_cert, ctl_key, ctl_fp = _make_cert(tmp_path, 'controller')
+    scr_cert, scr_key, _ = _make_cert(tmp_path, 'screen', days=10)
+    controller = _Controller(ctl_cert, ctl_key)
+    controller.trust(scr_cert)
+    monkeypatch.setattr(screen_push, 'HEARTBEAT_S', 0.2)
+    monkeypatch.setattr(screen_push, 'learn_pin', lambda der: None)
+    monkeypatch.setattr(screen_push, 'collect_health', lambda: dict(INFO))
+
+    async def body() -> None:
+        async with serve(
+            controller.handler, '127.0.0.1', 0, ssl=controller.context
+        ) as server:
+            port = server.sockets[0].getsockname()[1]
+            target = screen_push.Target(
+                1,
+                f'wss://127.0.0.1:{port}{screen_push.PATH}',
+                ctl_fp,
+                scr_cert,
+                scr_key,
+                screen_push.cert_digest(Path(scr_cert)),
+            )
+            replaced = dataclasses.replace(target, cert_digest='renewed')
+            monkeypatch.setattr(
+                screen_push, 'current_target', lambda: replaced
+            )
+            await asyncio.wait_for(screen_push.run_session(target), 5)
+            await asyncio.sleep(0.1)
+
+    asyncio.run(body())
+
+    assert [m['type'] for m in controller.messages] == ['hello']
+
+
+def test_cert_digest_follows_the_file(tmp_path: Path) -> None:
+    path = tmp_path / 'client.crt'
+    assert screen_push.cert_digest(path) == ''
+    path.write_text('one')
+    first = screen_push.cert_digest(path)
+    path.write_text('two')
+    assert screen_push.cert_digest(path) not in ('', first)
 
 
 def test_screen_stores_a_pushed_revocation_list(
@@ -814,3 +1005,125 @@ def test_push_thread_is_not_started_without_caddy(
 ) -> None:
     monkeypatch.setattr(caddy, 'RUN_DIR', tmp_path / 'missing')
     assert screen_push.start_background_push() is None
+
+
+@pytest.mark.django_db
+def test_push_refuses_a_ca_valid_certificate_for_another_key(
+    controller_on: None,
+) -> None:
+    """The key pin on top of the CA: a certificate from our own CA that
+    the records point at, but for a key the screen never joined with
+    (as a stolen CA key would mint), is refused."""
+    from anthias_server.controller import ca
+
+    node = _node()
+    issuer, issuer_key = ca.ensure_ca()
+    forged = pki.issue_client_cert(
+        issuer,
+        issuer_key,
+        pki.new_key().public_key(),
+        node.fingerprint,
+        pki.ROLE_SCREEN,
+    )
+    Node.objects.filter(pk=node.pk).update(
+        client_serial=pki.serial_hex(forged.serial_number),
+        client_fingerprint=pki.fingerprint(forged),
+    )
+
+    assert controller_push._screen_for(forged) is None
+
+    async def body() -> None:
+        verdict = await _connect(_communicator(_headers(cert=forged)))
+        assert verdict == {
+            'type': 'websocket.close',
+            'code': controller_push.CLOSE_UNKNOWN_SCREEN,
+        }
+
+    _run(body)
+    assert Node.objects.get().push_connection == ''
+
+
+@pytest.mark.django_db
+def test_push_accepts_a_renewed_certificate_for_the_joined_key(
+    controller_on: None,
+) -> None:
+    from anthias_server.controller import ca
+
+    node = _node()
+    renewed = ca.issue_for_screen(node.public_key_pem, node.fingerprint)
+    controller_push.replace_certificate(node, renewed)
+
+    assert pki.fingerprint(renewed) != pki.fingerprint(_LAST['cert'])
+    found = controller_push._screen_for(renewed)
+    assert found is not None
+    assert found.pk == node.pk
+
+
+def _run_forever_delays(
+    monkeypatch: pytest.MonkeyPatch, sessions: list[bool]
+) -> list[float]:
+    """The sleeps run_forever does between sessions; each entry of
+    ``sessions`` says whether that session opened before it dropped."""
+    target = screen_push.Target(
+        controller_id=1,
+        uri='wss://controller.example.com/x',
+        fingerprint='a' * 64,
+        cert_path='c',
+        key_path='k',
+    )
+    monkeypatch.setattr(screen_push, 'current_target', lambda: target)
+    monkeypatch.setattr('random.uniform', lambda a, b: 1.0)
+    outcomes = iter(sessions)
+
+    async def session(
+        _target: screen_push.Target, on_open: Any = None
+    ) -> None:
+        if next(outcomes):
+            on_open()
+        raise ConnectionError('dropped')
+
+    monkeypatch.setattr(screen_push, 'run_session', session)
+    delays: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        delays.append(seconds)
+        if len(delays) == len(sessions):
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr('asyncio.sleep', fake_sleep)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(screen_push.run_forever())
+    return delays
+
+
+def test_reconnect_backoff_resets_after_a_session_opened(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Five failed attempts back off; then a session runs and drops (a
+    # controller restart): the next attempt is quick again.
+    delays = _run_forever_delays(
+        monkeypatch, [False] * 5 + [True, False, False, False]
+    )
+
+    assert delays[:5] == [5, 10, 20, 40, 80]
+    assert delays[5] == screen_push.RETRY_MIN_S
+    # Soon after a session dropped, retries stay frequent, so screens
+    # are back within about half a minute of a restarted controller.
+    assert max(delays[6:]) <= screen_push.FAST_RETRY_MAX_S
+
+
+def test_reconnect_backoff_grows_to_the_cap_without_a_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    delays = _run_forever_delays(monkeypatch, [False] * 9)
+
+    assert delays[-1] == screen_push.RETRY_MAX_S
+
+
+def test_fast_retries_end_after_the_window() -> None:
+    assert screen_push.next_delay(20, fast_until=100, now=50) == (
+        screen_push.FAST_RETRY_MAX_S
+    )
+    assert screen_push.next_delay(200, fast_until=100, now=150) == (
+        screen_push.RETRY_MAX_S
+    )

@@ -129,9 +129,13 @@ Later, the same section shows **This screen is a controller**, with a
 link to **Screens** and **Turn off controller mode**. Turning
 authentication off also turns controller mode off.
 
-You can use the same join information for every screen. **Regenerate**
-makes the current one stop working, for example if it was shared by
-mistake. Screens that already joined are not affected.
+You can use the same join information for every screen for one hour.
+After that it stops working, so a copy left in a chat or a screenshot
+can't be used to add a device later; reload the **Screens** page for
+new join information. **Regenerate** makes the current one stop working
+at once, for example if it was shared by mistake. Screens that already
+joined are not affected. The controller only calls a joining screen
+back on port 8443, never on its own loopback or internal addresses.
 
 ## Add a screen
 
@@ -146,7 +150,7 @@ mistake. Screens that already joined are not affected.
 4. Click **Join controller**.
 
 The screen now shows **Waiting for approval** with a short **check
-code**, such as `7F3A-91C2`. Nothing is trusted yet: the request only
+code**, such as `K7QX-4MRA-9ZTD`. Nothing is trusted yet: the request only
 appears on the controller.
 
 5. On the controller's **Screens** page, the screen is listed under
@@ -182,8 +186,12 @@ From there:
   because assets added directly on a screen are removed. Each screen's
   playlist is made to match the controller's: the same assets, schedules
   and order. Files that haven't changed are not uploaded again, so
-  publishing an unchanged playlist takes about a second. The result
-  shows per screen.
+  publishing an unchanged playlist takes about a second. Two screens
+  are published to at a time (one on a single-core board) and the rest
+  wait their turn, so the controller's own display schedule and
+  content checks are never held up. An asset that is still being
+  processed, or whose file is missing, is left out of that publish, and
+  screens keep the copy they already have. The result shows per screen.
 * **Previous asset**, **Next asset**, **Display on** and **Display off**
   on every screen, or on one from its **⋯** menu. Display on/off needs a display that
   supports HDMI-CEC.
@@ -214,12 +222,14 @@ something happens:
 | What happened | When the controller shows it |
 |---|---|
 | A screen shuts down, restarts or its Anthias stops | Offline within a couple of seconds |
-| A screen's network drops without warning | Offline within about 30 to 60 seconds |
-| The screen or the controller comes back | Online again within about 10 to 30 seconds |
+| A screen's network drops without warning | Offline within about 20 to 40 seconds |
+| A screen comes back | Online again within about 10 seconds of Anthias starting on it |
+| The controller restarts | Screens are online again within about 30 seconds of it coming back |
 
 If a screen can't keep that connection open (for example, a firewall
 blocks it), the controller falls back to checking that screen itself
-every 15 minutes. **Check now** checks every screen right away.
+about every 15 to 20 minutes. **Check now** checks every screen right
+away.
 
 For each online screen, the **Screens** page shows free disk space, free
 memory and uptime, and flags anything that needs attention:
@@ -250,8 +260,12 @@ Management traffic never uses passwords and never leaves your network:
 * **Every join is approved by a person.** Knowing the join information
   only lets a device ask to join. It is not managed until someone
   approves it on the controller, after comparing the check code. The
-  check code comes from the screen's own certificate, so a different
-  device asking in its name shows a different code.
+  check code is worked out from the join information's secret and both
+  devices' certificates, so it only matches when this screen used this
+  controller's join information and the controller sees this screen's
+  certificate. A different device asking in its name shows a different
+  code, and with 12 characters it can't be made to match by trying
+  many keys.
 * **The controller is a small certificate authority.** When it is
   approved, the screen gets a client certificate signed by the
   controller. The screen creates the signing request with its own key,
@@ -262,16 +276,39 @@ Management traffic never uses passwords and never leaves your network:
   certificate. The controller in turn knows screens by the certificate
   it issued them, for example on the status connection. Both sides
   still pin each other's identity certificate as before.
+* **Certificate authority and key pinning, together.** Every
+  management connection has to pass two separate checks. The
+  certificate must come from the controller's certificate authority
+  and not be revoked. It must also be for the device key that was
+  recorded when the screen joined. The screen records the controller's
+  key from the certificate it already pinned in the join information,
+  and the controller records the screen's key from the certificate it
+  reached the screen on. A certificate made for any other key is
+  refused, even one signed by the controller's own authority, for
+  example with a stolen authority key. Renewed certificates are for the
+  same keys, so renewals keep working without anything to re-pin.
+  The controller also only signs a screen's request for the key it
+  recorded when that screen asked to join.
 * **Certificates renew themselves.** Client certificates are valid for
   a year. A screen asks for a new one over its status connection when
-  less than 30 days are left, and the controller renews its own
-  automatically. Nothing needs to be done by hand.
+  less than 30 days are left (once per connection), and the controller
+  renews its own automatically. The old certificate keeps working
+  until the screen has connected with the new one, so a renewal lost
+  on the way never locks a screen out. If a screen has no status
+  connection, or still hasn't renewed with 15 days left, the controller
+  renews it over port 8443 instead. Nothing needs to be done by hand.
+* **The certificate authority fails safe.** It is created only on a
+  controller that has none. If its files exist but can't be read (a
+  failing SD card, a half-restored backup), the controller does not
+  replace them, because a new authority would cut off every screen.
+  The **Screens** page says what is wrong until the files are fixed.
 * **Revocation list.** When you remove a screen, or a certificate is
   replaced, the controller revokes the old certificate. Revoked
   certificates are listed in a signed revocation list (CRL). Connected
   screens get each new list at once; the controller re-signs it at
   least every five days, and screens refuse a controller certificate
-  that is on it.
+  that is on it. A certificate drops off the list once it would have
+  expired anyway.
 * **Authentication comes first.** Joining and controller mode need it,
   and every Anthias device shows a warning on each page while it is
   off, because anyone on the network could then change the screen.
@@ -282,6 +319,10 @@ Management traffic never uses passwords and never leaves your network:
   hash of the controller's token. The controller stores screen tokens
   encrypted, with a key that is only in a backup if you choose to
   include the device keys (below).
+* **The controller's token is narrow.** The screen accepts it only on
+  port 8443 and only for the calls the controller makes (assets,
+  playlist order, playback, display power, reboot and pairing). It
+  can't create or restore backups.
 
 ### Backups
 
@@ -294,7 +335,11 @@ controller's backup onto new hardware, every screen has to join again.
 
 To move a controller (or a screen) to new hardware without that, turn
 on **Include this device's keys** under **Settings → Backup &
-restore** and choose a password before clicking **Get backup**. The
+restore** and choose a password before clicking **Get backup**.
+Authentication must be on, and you confirm your current sign-in
+password: anyone holding these keys can stand in for the device. Every
+export, and every refused attempt, is logged, and on a controller it
+also shows under **Activity** on the **Screens** page. The
 keys are added to the backup encrypted with that password
 (AES-256-GCM, with the key derived from your password by scrypt), the
 same idea as the encrypted configuration backups in pfSense and
@@ -303,6 +348,10 @@ OPNsense. They can't be added without a password.
 To restore them, enter that password in **Keys password** before
 uploading the backup. Without it, everything else is restored and the
 keys are left out. A wrong password restores nothing.
+
+Restoring a backup revokes every API token in it and ends
+multi-screen management on a screen, so a restored backup can't bring
+back old credentials. Join the screen again afterwards.
 
 Keep a backup with keys as safe as the device itself: whoever has it
 and the password can stand in for the controller. Restore it on one
@@ -348,9 +397,30 @@ join again.
 **The check codes don't match.** Don't approve the request. Reject it,
 and check which device is using that screen's address.
 
+**"That request has expired."** Nobody approved it within 24 hours.
+Click **Cancel request** on the screen and join again.
+
+**"This controller's certificate authority is unusable."** The
+controller's `ca.key` or `ca.crt` (in `~/.anthias/ssl/controller/`)
+can't be read. The controller leaves them alone so its screens keep
+working once they are back. Restore them from a backup that includes
+the device keys. Only if that isn't possible, remove both files: the
+controller then creates a new authority, and every screen has to join
+again.
+
 **"Could not deliver the approval."** The controller couldn't reach the
 screen on port 8443 when you approved. The request stays listed;
 check the network and approve again.
+
+**"The request does not record its key."** The request was made
+before an update. Reject it and join the screen again.
+
+**Right after an update, a managed screen refuses the controller for a
+moment.** Screens that were approved before an update record the
+controller's key the next time they connect to it, which is normally
+within a minute. Until then the screen refuses the controller's calls
+on port 8443 rather than trust a certificate it can't check. If it
+lasts, check that the screen can reach the controller on port 8443.
 
 **"Could not reach the controller."** Check that the screen can reach
 the controller's address on port 8443, and that controller mode is on.

@@ -30,6 +30,7 @@ than mounting ``~/.anthias`` into Caddy: Caddy only ever sees the
 certificate and key it is serving.
 """
 
+import fcntl
 import http.client
 import json
 import logging
@@ -38,7 +39,8 @@ import shutil
 import socket
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -73,11 +75,32 @@ CLIENT_CERT_HEADER = 'X-Anthias-Client-Cert'
 # Edge limits. Kept in line with start_server.sh's uvicorn guards
 # (--timeout-keep-alive 30): a client gets 10 s to send its headers,
 # an idle keep-alive connection is closed after 30 s. There is no read
-# or write timeout on the body, and no size limit, because uploads and
-# backup downloads are unbounded and can take many minutes on a Pi.
+# or write timeout on the body, because uploads and backup downloads
+# can take many minutes on a Pi. Body size is capped only on routes
+# that never carry an upload (SMALL_BODY_PATHS).
 READ_HEADER_TIMEOUT = '10s'
 IDLE_TIMEOUT = '30s'
 MAX_HEADER_BYTES = 64 * 1024
+
+# Routes that only ever take a small body get a hard cap at the edge,
+# so an unauthenticated client cannot make anthias-server buffer or
+# spool a huge request before CSRF or auth even run (Django has no
+# global limit: DATA_UPLOAD_MAX_MEMORY_SIZE is None for uploads).
+SMALL_BODY_PATHS = ('/login', '/login/*', '/settings/certificate/*')
+SMALL_BODY_MAX_BYTES = 256 * 1024
+
+# Defense in depth for the UI. Deliberately leaves script-src alone:
+# Alpine.js needs eval-style expressions, so a script policy would
+# have to allow 'unsafe-eval' and buy little.
+CONTENT_SECURITY_POLICY = (
+    "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; "
+    "form-action 'self'"
+)
+# Short on purpose: an operator who later goes back to the self-signed
+# default (or an expired upload) must not be locked out behind a
+# browser error for a year. A day still keeps a returning browser off
+# plain HTTP for the session that matters.
+HSTS_VALUE = 'max-age=86400'
 
 ServerProvider = Callable[[], dict[str, dict[str, Any]]]
 _server_providers: list[ServerProvider] = []
@@ -127,6 +150,35 @@ def proxy_handler() -> dict[str, Any]:
             }
         },
     }
+
+
+def body_limit(max_bytes: int) -> dict[str, Any]:
+    """A request_body handler: larger bodies get 413 from Caddy."""
+    return {'handler': 'request_body', 'max_size': max_bytes}
+
+
+def _security_headers(hsts: bool) -> dict[str, Any]:
+    headers = {'Content-Security-Policy': [CONTENT_SECURITY_POLICY]}
+    if hsts:
+        headers['Strict-Transport-Security'] = [HSTS_VALUE]
+    return {'handler': 'headers', 'response': {'set': headers}}
+
+
+def _ui_routes(*, hsts: bool) -> list[dict[str, Any]]:
+    """Routes shared by the UI sites: small-body caps, then the proxy."""
+    headers = _security_headers(hsts)
+    return [
+        {
+            'match': [{'path': list(SMALL_BODY_PATHS)}],
+            'handle': [
+                headers,
+                body_limit(SMALL_BODY_MAX_BYTES),
+                proxy_handler(),
+            ],
+            'terminal': True,
+        },
+        {'handle': [headers, proxy_handler()]},
+    ]
 
 
 def _server_limits() -> dict[str, Any]:
@@ -183,7 +235,13 @@ def _https_server(
     )
     return {
         'listen': [f':{https_port}'],
-        'routes': [{'handle': [proxy_handler()]}],
+        # HSTS only for a certificate browsers can validate: pinning
+        # browsers to HTTPS on the self-signed default would lock the
+        # operator out behind a warning page they cannot click through.
+        'routes': _ui_routes(
+            hsts=state.mode
+            in (web_certificate.MODE_CUSTOM, web_certificate.MODE_ACME)
+        ),
         'tls_connection_policies': policies,
         'automatic_https': automatic,
         **_server_limits(),
@@ -358,7 +416,41 @@ class ApplyResult:
     servers: tuple[str, ...]
 
 
-_apply_lock = threading.Lock()
+# RLock: apply_change() holds it across snapshot -> change -> apply ->
+# restore and calls apply() inside. The file lock covers the CLI
+# (``manage.py web_tls``), which runs in its own process.
+_apply_lock = threading.RLock()
+
+
+_lock_depth = 0
+
+
+@contextmanager
+def _config_lock() -> Iterator[None]:
+    global _lock_depth
+    with _apply_lock:
+        # Only the outermost holder takes the file lock: flock() on a
+        # second descriptor for the same file would block on our own
+        # lock when apply_change() calls apply().
+        fd: int | None = None
+        if _lock_depth == 0 and RUN_DIR.is_dir():
+            try:
+                fd = os.open(
+                    RUN_DIR / '.apply.lock', os.O_WRONLY | os.O_CREAT, 0o600
+                )
+            except OSError:
+                logger.warning(
+                    'Cannot open the Caddy apply lock in %s', RUN_DIR
+                )
+        _lock_depth += 1
+        try:
+            if fd is not None:
+                fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            _lock_depth -= 1
+            if fd is not None:
+                os.close(fd)
 
 
 def apply() -> ApplyResult:
@@ -369,7 +461,7 @@ def apply() -> ApplyResult:
     :class:`CaddyConfigError` when it rejects the config, in which
     case Caddy keeps serving the previous one.
     """
-    with _apply_lock:
+    with _config_lock():
         state = web_certificate.load_state()
         stage_certificates(state)
         config = build_config(state)
@@ -386,22 +478,25 @@ def apply() -> ApplyResult:
 def apply_change(change: Callable[[], None]) -> ApplyResult:
     """Make a web-certificate change on disk, then apply it.
 
-    If Caddy rejects the result, or cannot be reached, the files are
-    put back the way they were (and re-applied, best effort) before the
-    error propagates. Either the new certificate is live, or nothing
-    changed.
+    If the change itself fails part-way (a full SD card), or Caddy
+    rejects the result or cannot be reached, the files are put back the
+    way they were (and re-applied, best effort) before the error
+    propagates. Either the new certificate is live, or nothing changed.
+    The whole sequence runs under one lock, so two changes (two browser
+    tabs, or the UI and the CLI) cannot roll back each other's files.
     """
-    saved = web_certificate.snapshot()
-    change()
-    try:
-        return apply()
-    except CaddyError:
-        web_certificate.restore(saved)
+    with _config_lock():
+        saved = web_certificate.snapshot()
         try:
-            apply()
-        except CaddyError:
-            logger.warning('Could not re-apply the previous Caddy config')
-        raise
+            change()
+            return apply()
+        except Exception:
+            web_certificate.restore(saved)
+            try:
+                apply()
+            except (CaddyError, OSError):
+                logger.warning('Could not re-apply the previous Caddy config')
+            raise
 
 
 def apply_on_startup(

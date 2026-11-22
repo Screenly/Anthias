@@ -19,7 +19,8 @@ from django.urls import reverse
 from anthias_server.controller import ca, vault
 from anthias_server.lib import backup_helper, identity_backup, node_identity
 
-PASSWORD = 'correct horse battery'  # NOSONAR: test fixture
+# Test fixture, not a real credential.
+PASSWORD = 'correct horse battery'  # NOSONAR
 
 
 @pytest.fixture
@@ -196,6 +197,96 @@ def test_settings_refuses_keys_without_a_confirmed_password(
     assert response['Location'].endswith('#backup')
 
 
+def _export_keys(client: Client, **extra: str) -> object:
+    return client.post(
+        reverse('anthias_app:settings_backup'),
+        {
+            'include_keys': 'true',
+            'keys_password': PASSWORD,
+            'keys_password_2': PASSWORD,
+            **extra,
+        },
+    )
+
+
+def _key_export_audit() -> list[tuple[str, str]]:
+    from anthias_server.controller.models import AuditEntry
+
+    return list(
+        AuditEntry.objects.filter(action='key export').values_list(
+            'outcome', 'actor'
+        )
+    )
+
+
+@pytest.mark.django_db
+def test_key_export_is_refused_while_auth_is_off(
+    home: Path, operator_client: Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from anthias_server.settings import settings
+
+    monkeypatch.setitem(settings.data, 'auth_backend', '')
+    _controller_identity()
+
+    response = _export_keys(operator_client, current_password='op-pass-1234')
+
+    assert response.status_code == 302  # type: ignore[attr-defined]
+    assert response['Location'].endswith('#backup')  # type: ignore[index]
+    assert _key_export_audit() == [('refused', 'operator')]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('current', ['', 'not-my-password'])
+def test_key_export_needs_the_current_password(
+    home: Path,
+    operator_client: Client,
+    monkeypatch: pytest.MonkeyPatch,
+    current: str,
+) -> None:
+    from anthias_server.settings import settings
+
+    monkeypatch.setitem(settings.data, 'auth_backend', 'auth_basic')
+    _controller_identity()
+
+    response = _export_keys(operator_client, current_password=current)
+
+    assert response.status_code == 302  # type: ignore[attr-defined]
+    assert _key_export_audit() == [('refused', 'operator')]
+
+
+@pytest.mark.django_db
+def test_key_export_with_the_current_password_is_audited(
+    home: Path, operator_client: Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from anthias_server.settings import settings
+
+    monkeypatch.setitem(settings.data, 'auth_backend', 'auth_basic')
+    _controller_identity()
+
+    response = _export_keys(operator_client, current_password='op-pass-1234')
+
+    assert response.status_code == 200  # type: ignore[attr-defined]
+    assert _key_export_audit() == [('ok', 'operator')]
+
+
+@pytest.mark.django_db
+def test_settings_asks_for_the_current_password_to_export_keys(
+    home: Path, operator_client: Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from anthias_server.settings import settings
+
+    # The page re-reads anthias.conf; keep the values set here.
+    monkeypatch.setattr(settings, 'load', lambda: None)
+    monkeypatch.setitem(settings.data, 'auth_backend', 'auth_basic')
+    html = operator_client.get(reverse('anthias_app:settings')).content
+    assert b'id="keys_current_password"' in html
+
+    monkeypatch.setitem(settings.data, 'auth_backend', '')
+    html = operator_client.get(reverse('anthias_app:settings')).content
+    assert b'id="keys_current_password"' not in html
+    assert b'id="keys-auth-off"' in html
+
+
 @pytest.mark.django_db
 def test_settings_offers_the_keys_option(
     home: Path, operator_client: Client
@@ -237,3 +328,31 @@ def test_restore_asks_before_replacing_anything(
     form = text.split('id="recover-form"')[1].split('</form>')[0]
     assert 'name="keys_password"' in form
     assert 'requestSubmit' not in text.split('id="backup"')[1]
+
+
+def test_vault_picks_up_a_restored_key_without_a_restart(
+    home: Path,
+) -> None:
+    # Celery keeps its own key cache; a restore in the web process
+    # replaces the key file and must not leave Celery on the old key.
+    from cryptography.fernet import Fernet
+
+    vault.encrypt('primes the cache')
+    restored = Fernet.generate_key()
+    token = Fernet(restored).encrypt(b'screen token').decode()
+    path = Path(vault.key_path())
+    tmp = path.with_name('restored.key')
+    tmp.write_bytes(restored)
+    os.replace(tmp, path)  # what a restore does, in another process
+
+    assert vault.decrypt(token) == 'screen token'
+
+
+def test_vault_reuses_the_key_while_the_file_is_unchanged(
+    home: Path,
+) -> None:
+    vault.encrypt('creates the key')
+    with mock.patch.object(
+        vault, '_read_or_create_key', side_effect=AssertionError
+    ):
+        assert vault.decrypt(vault.encrypt('x')) == 'x'
