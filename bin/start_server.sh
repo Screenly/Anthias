@@ -92,9 +92,9 @@ UVICORN_LIMIT_CONCURRENCY="${ANTHIAS_LIMIT_CONCURRENCY:-256}"
 # Trust X-Forwarded-* only from explicitly listed proxies. We deliberately
 # do NOT default this to '*' — the IP allowlists in views_files.py rely on
 # the TCP peer address, and a wildcard would let any client spoof
-# REMOTE_ADDR via X-Forwarded-For. Operators who terminate TLS at a
-# reverse proxy (e.g. the Caddy sidecar bin/enable_ssl.sh installs) get
-# this set automatically via the compose override.
+# REMOTE_ADDR via X-Forwarded-For. The compose templates set it to '*'
+# because anthias-server publishes no host port there: every external
+# request comes through anthias-caddy, which overwrites the headers.
 UVICORN_PROXY_ARGS=()
 if [[ -n "${FORWARDED_ALLOW_IPS:-}" ]]; then
     UVICORN_PROXY_ARGS=(

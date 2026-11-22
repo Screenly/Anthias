@@ -25,6 +25,10 @@ set -euo pipefail
 GIT_SHORT_HASH=$(git rev-parse --short=7 HEAD)
 BOARDS=(pi2 pi3 pi3-64 pi4-64 pi5 x86 arm64)
 SERVICES=(server redis viewer)
+# anthias-caddy is published to GHCR only.
+if [[ "${NAMESPACE}" == ghcr.io/* ]]; then
+  SERVICES+=(caddy)
+fi
 
 retry() {
   local attempt

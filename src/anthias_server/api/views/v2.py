@@ -349,12 +349,10 @@ def _format_ip_urls(node_ip: str) -> list[str]:
             obj = ipaddress.ip_address(ip)
         except ValueError:
             continue
-        # NOSONAR (S5332): Anthias serves the admin UI on plain HTTP per
-        # CLAUDE.md; TLS is opt-in via the Caddy sidecar. The splash
-        # surfaces these URLs so the operator can click into the
-        # device's LAN UI — they must match how the device actually
-        # listens. Emitting https:// here would point at a port that
-        # isn't bound on a default install.
+        # NOSONAR (S5332): these values are part of the v2 API (the
+        # info endpoint and the splash page read them), so their shape
+        # stays as it was. They still work: anthias-caddy answers plain
+        # HTTP on :80 and redirects the UI to HTTPS.
         if isinstance(obj, ipaddress.IPv6Address):
             out.append(f'http://[{ip}]')  # NOSONAR
         else:

@@ -32,8 +32,10 @@
 # and the daemon would not notice, whereas a digest names exactly the
 # bytes that are about to run.
 #
-# Images from any other publisher (the Caddy sidecar that enable_ssl.sh
-# adds, say) are not ours to vouch for, and are skipped.
+# ghcr.io/screenly/anthias-caddy, the web front end every install runs,
+# is upstream Caddy rebuilt by docker-build.yaml and falls under the
+# first rule. Images from any other publisher are not ours to vouch
+# for, and are skipped.
 #
 # Exits non-zero if any of those images is unsigned, signed by someone
 # else, or can't be checked at all, and names each one on stderr.

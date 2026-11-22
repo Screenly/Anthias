@@ -49,6 +49,7 @@ docker/Dockerfile.websocket
 docker/Dockerfile.redis
 docker/Dockerfile.viewer
 docker/Dockerfile.test
+docker/Dockerfile.caddy
 docker-compose.yml
 docker-compose.override.yml
 

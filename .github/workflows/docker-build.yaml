@@ -154,6 +154,7 @@ jobs:
             --service=server \
             --service=viewer \
             --service=redis \
+            --service=caddy \
             ${{ github.event_name == 'push' && '--push --skip-latest-tag' || '' }}
 
       # Sign the freshly-pushed images with keyless build-provenance
@@ -185,7 +186,7 @@ jobs:
         run: |
           set -euo pipefail
           short_hash="$(git rev-parse --short=7 HEAD)"
-          for service in server viewer redis; do
+          for service in server viewer redis caddy; do
             ref="ghcr.io/screenly/anthias-${service}:${short_hash}-${{ matrix.board }}"
             digest="$(docker buildx imagetools inspect "${ref}" \
               --format '{{ .Manifest.Digest }}')"
@@ -215,6 +216,14 @@ jobs:
         with:
           subject-name: ghcr.io/screenly/anthias-redis
           subject-digest: ${{ steps.digests.outputs.redis }}
+          push-to-registry: true
+
+      - name: Attest anthias-caddy provenance (GHCR)
+        if: success() && github.event_name == 'push'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: ghcr.io/screenly/anthias-caddy
+          subject-digest: ${{ steps.digests.outputs.caddy }}
           push-to-registry: true
 
       - name: Attest anthias-server provenance (Docker Hub)
@@ -266,6 +275,8 @@ jobs:
           SERVER_DIGEST: ${{ steps.digests.outputs.server }}
           VIEWER_DIGEST: ${{ steps.digests.outputs.viewer }}
           REDIS_DIGEST: ${{ steps.digests.outputs.redis }}
+          # GHCR only: anthias-caddy is not published to Docker Hub.
+          CADDY_DIGEST: ${{ steps.digests.outputs.caddy }}
         run: bash .github/workflows/scripts/cosign-sign-images.sh
 
       - name: Sign images with cosign (Docker Hub)

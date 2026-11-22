@@ -188,9 +188,21 @@ cat /home/${USER}/anthias/docker-compose.yml.tmpl \
 rm -f /home/${USER}/anthias/docker-compose.cec.override.yml
 
 COMPOSE_FILES=(-f /home/${USER}/anthias/docker-compose.yml)
+
+# anthias-caddy is part of docker-compose.yml on every install now, so
+# the override bin/enable_ssl.sh used to generate is obsolete, and
+# merging it would swap the signed anthias-caddy image back to upstream
+# Caddy with the old Caddyfile. Set it aside rather than deleting it.
+# The certificate it pointed at is carried over by anthias-server on
+# its next start (web_certificate.migrate_legacy_layout()): a BYO
+# certificate becomes the uploaded web certificate, a --domain setup
+# keeps Let's Encrypt for that domain (and its certificate, which lives
+# in the anthias-caddy-data volume both setups share), and the old
+# local-CA mode gives way to the screen's own certificate.
 SSL_OVERRIDE=/home/${USER}/anthias/docker-compose.ssl.override.yml
 if [[ -f "$SSL_OVERRIDE" ]]; then
-    COMPOSE_FILES+=(-f "$SSL_OVERRIDE")
+    mv -f "$SSL_OVERRIDE" "${SSL_OVERRIDE}.migrated"
+    echo "Retired ${SSL_OVERRIDE}; HTTPS is now built in."
 fi
 
 # On a memory-tight board, free RAM before pulling. `docker compose pull`

@@ -288,6 +288,87 @@
   </section>
   {% endif %}
 
+  {# ===== HTTPS certificate ===== #}
+  <section class="settings-section mt-4" id="web-certificate" x-data="{ uploading: false }">
+    <header>
+      <div>
+        <h2>HTTPS certificate</h2>
+        <p class="settings-section__lede">
+          The certificate this player's web interface uses.
+          {% if web_tls.mode == 'default' %}
+            It is using its own self-signed certificate, so browsers show a warning. Upload a certificate for a name that points at this player to remove the warning.
+          {% elif web_tls.mode == 'custom' %}
+            It is using a certificate you uploaded.
+          {% else %}
+            It gets a Let's Encrypt certificate for {{ web_tls.domain }}, set up with <code>bin/enable_ssl.sh --domain</code>.
+          {% endif %}
+        </p>
+      </div>
+      <div class="settings-section__actions">
+        {% if web_tls.mode != 'default' %}
+        <form method="post" action="{% url 'anthias_app:settings_certificate_revert' %}" class="inline m-0">
+          {% csrf_token %}
+          <button type="submit" id="btn-certificate-revert" class="app-btn app-btn-outline-dark">
+            <i class="ti ti-arrow-back-up"></i><span>Revert to default</span>
+          </button>
+        </form>
+        {% endif %}
+        <button type="button" id="btn-certificate-upload" class="app-btn app-btn-primary" @click="uploading = !uploading">
+          <i class="ti ti-upload"></i><span>Upload certificate</span>
+        </button>
+      </div>
+    </header>
+
+    {% if web_tls.certificate %}
+    <div class="settings-section__row" id="web-certificate-details">
+      <div>
+        <strong>{{ web_tls.certificate.subject }}</strong>
+        <p class="settings-section__lede">
+          Names: {{ web_tls.certificate.sans|join:", "|default:"none" }}<br>
+          Issued by: {% if web_tls.certificate.self_signed %}itself (self-signed){% else %}{{ web_tls.certificate.issuer }}{% endif %}<br>
+          Expires: {{ web_tls.certificate.not_after|date:"Y-m-d" }}
+        </p>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="settings-section__row">
+      <div>
+        <strong>Screen identity</strong>
+        <p class="settings-section__lede">
+          SHA-256 fingerprint of this player's own certificate. Other Anthias players use it to recognize this one. Uploading a web certificate never changes it.<br>
+          <code id="node-fingerprint" class="break-all">{{ web_tls.node_fingerprint }}</code>
+        </p>
+      </div>
+    </div>
+
+    <form
+      method="post"
+      action="{% url 'anthias_app:settings_certificate_upload' %}"
+      enctype="multipart/form-data"
+      x-show="uploading"
+      x-cloak
+      class="settings-stack mt-4"
+      id="web-certificate-form"
+    >
+      {% csrf_token %}
+      <p class="settings-section__lede m-0">
+        PEM files. The certificate may already include its chain; otherwise add the chain separately, leaf issuer first. The key must not be passphrase-protected.
+      </p>
+      <label for="certificate">Certificate</label>
+      <input type="file" class="app-input" id="certificate" name="certificate" accept=".pem,.crt,.cer" required>
+      <label for="private_key">Private key</label>
+      <input type="file" class="app-input" id="private_key" name="private_key" accept=".pem,.key" required>
+      <label for="chain">Chain (optional)</label>
+      <input type="file" class="app-input" id="chain" name="chain" accept=".pem,.crt,.cer">
+      <div>
+        <button type="submit" id="btn-certificate-install" class="app-btn app-btn-primary">
+          <i class="ti ti-lock"></i><span>Check &amp; install</span>
+        </button>
+      </div>
+    </form>
+  </section>
+
   {# ===== Backup & restore ===== #}
   <section class="settings-section mt-4">
     <header>

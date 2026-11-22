@@ -110,7 +110,7 @@ jobs:
           echo "$GH_TOKEN" | docker login ghcr.io \
             -u "${{ github.actor }}" --password-stdin
           missing=()
-          for service in server viewer redis; do
+          for service in server viewer redis caddy; do
             ref="ghcr.io/screenly/anthias-${service}:${SHORT_HASH}-${BOARD}"
             if ! docker buildx imagetools inspect "$ref" >/dev/null 2>&1; then
               missing+=("$ref")
