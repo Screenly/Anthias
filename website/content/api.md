@@ -8,20 +8,24 @@ layout: api
 
 Anthias exposes a REST API so you can manage a player without touching the web
 interface: script asset uploads, rotate playlists, trigger backups, or wire the
-device into your own tooling. Everything the dashboard does is available over
-HTTP, which makes Anthias straightforward to automate across a fleet of screens.
+device into your own tooling. Almost everything the dashboard does is available
+over HTTP, which makes Anthias straightforward to automate across a fleet of
+screens.
 
 The API runs directly on each device, so the base URL is simply the player's own
 address on your network, under `/api/`:
 
 ```
-http://<device-ip>/api/
+https://<device-ip>/api/
 ```
 
-That is port 80 on a normal install; a development environment serves the same
-API on port 8000. If you have enabled SSL on the device, use `https://` with the
-hostname on the certificate instead. Requests and responses are JSON, except for
-asset uploads, which use `multipart/form-data`.
+That is port 443 on a normal install. Out of the box the device serves its own
+self-signed certificate, so either trust that certificate or upload one for a
+name that points at the device (**Settings → HTTPS certificate**) and use that
+name. Plain `http://` on port 80 still answers `/api/*` for one more release, so
+existing scripts keep working while you move them to `https://`. A development
+environment serves the API over plain HTTP on port 8000. Requests and responses
+are JSON, except for asset uploads, which use `multipart/form-data`.
 
 ## Versioning
 
@@ -43,15 +47,20 @@ shape of the responses you depend on.
 A fresh install serves the API without authentication, on the assumption that it
 sits on a trusted local network. Switch that on from **Settings → Authentication**
 in the dashboard, or over this API by PATCHing `auth_backend` on
-`/api/v2/device_settings`; headless clients then authenticate with HTTP Basic.
-[Anthias for AI agents](/agents/) walks through enabling it and the behavior to
-expect, including the fact that an unauthenticated call redirects to the login
-form rather than returning `401`.
+`/api/v2/device_settings`. Headless clients then send an API token, created
+under **Settings → API tokens**, as `Authorization: Bearer <token>`. Tokens are
+only accepted over HTTPS and can be revoked one by one; they cannot create or
+restore backups. HTTP Basic with the operator's username and password still
+works but is deprecated. [Anthias for AI agents](/agents/) walks through enabling
+it and the behavior to expect, including the fact that an unauthenticated call
+redirects to the login form rather than returning `401`.
 
-Either way, do **not** expose a device's HTTP port directly to the public
-internet. Basic credentials travel in the clear over plain HTTP, so keep the
-device behind your LAN or a VPN, or put a reverse proxy with its own access
-control in front of it.
+A screen that has joined a [multi-screen controller](/docs/multi-screen/) is
+managed from the controller only: its own API answers `403` on ports 80 and 443.
+
+Either way, do **not** expose a device's web ports directly to the public
+internet. Keep the device behind your LAN or a VPN, or put a reverse proxy with
+its own access control in front of it.
 
 ## Responses and errors
 

@@ -5,107 +5,144 @@ description: "Anthias documentation: installation, deployment, development, and 
 
 ## How to get logs from Anthias
 
-SSH into your Raspberry Pi. For instance, if you've set `pi` for the username
-and `raspberrypi` for the hostname, then run:
+Every Anthias service sends its output to the host's `systemd-journald`,
+so the system handles rotation and retention and nothing writes unbounded
+`*-json.log` files under `/var/lib/docker/containers/`. You can read those
+logs from the REST API without logging in to the device, or over SSH with
+`journalctl` or `docker`.
+
+| Service | Container name | Journal tag | What it does |
+| ------- | -------------- | ----------- | ------------ |
+| `anthias-server` | `anthias-anthias-server-1` | `anthias-server` | uvicorn: web UI, REST API, WebSocket at `/ws`, static and media files |
+| `anthias-caddy` | `anthias-anthias-caddy-1` | `anthias-caddy` | Caddy, the web front end on ports 80 and 443 (HTTPS, routing) |
+| `anthias-viewer` | `anthias-anthias-viewer-1` | `anthias-viewer` | Viewer service and the WebView that draw the screen |
+| `anthias-celery` | `anthias-anthias-celery-1` | `anthias-celery` | Celery worker (asset downloads, video conversion, cleanup) |
+| `redis` | `anthias-redis-1` | `anthias-redis` | Redis (Celery broker, Channels layer, viewer messaging) |
+| `anthias-wifi-connect` | `anthias-wifi-connect` | `anthias-wifi-connect` | WiFi setup portal; only runs while the device has no network |
+
+One piece runs on the host rather than in a container: the
+`anthias-host-agent` systemd unit, which handles reboot and shutdown,
+publishes host facts, and answers the log API below.
+
+### From the REST API
+
+`GET /api/v2/system/logs` returns a snapshot of the host journal as JSON,
+on both Raspberry Pi OS / Debian installs and balena. It takes the same
+credentials as the rest of the API: when authentication is on, create a
+token under **Settings → API tokens** and send it as a bearer token.
+
+```bash
+# The newest 200 lines from the server container
+$ curl -sk -H "Authorization: Bearer ${TOKEN}" \
+    "https://<device-ip>/api/v2/system/logs?container=anthias-anthias-server-1&count=200"
+
+# The last hour of the Docker daemon
+$ curl -sk -H "Authorization: Bearer ${TOKEN}" \
+    "https://<device-ip>/api/v2/system/logs?unit=docker.service&since=-1h"
+```
+
+The query parameters are:
+
+* `count`: number of lines, newest last. Defaults to 500, capped at 2000.
+* `container`: one container. On Raspberry Pi OS / Debian use the
+  container name from the table above (`anthias-anthias-server-1`); on
+  balena use the service name (`anthias-server`).
+* `unit`: one systemd unit, e.g. `docker.service` or `anthias-host-agent.service`.
+* `since` / `until`: any time spec `journalctl` accepts, e.g. `-1h`,
+  `yesterday`, or `2026-10-26 09:00`.
+
+It is a snapshot, not a live tail: request it again to see newer lines.
+Secret-looking values (WiFi passphrases, tokens) are redacted. The
+response's `persistent` field tells you whether the journal survives a
+reboot (see [Keeping logs across reboots](#keeping-logs-across-reboots)).
+The full schema is in the [API reference](/api/).
+
+### Using `journalctl`
+
+SSH into the device. For instance, if you've set `pi` for the username
+and `raspberrypi` for the hostname:
 
 ```bash
 $ ssh pi@raspberrypi
 ```
 
-Anthias ships its container logs through the host's `systemd-journald`,
-so the system handles rotation and retention for you. The four core
-services (`anthias-server`, `anthias-viewer`, `anthias-celery`, `redis`)
-plus the optional `anthias-caddy` TLS sidecar all use the journald
-driver, so they don't write the unbounded `*-json.log` files under
-`/var/lib/docker/containers/` that can fill an SD card on long-running
-installs. You can read the logs three ways: `docker logs`,
-`docker compose logs`, or `journalctl` directly.
+Each container is tagged in the journal, so you can filter on the tag
+without going through Docker. This is also the way to combine container
+logs with system logs, or search a long time range:
 
-> **Note**
->
-> Switching the driver only affects future writes. Devices that were
-> on the old `json-file` driver will still have the existing log files
-> on disk after upgrading. To reclaim that space, truncate the leftover
-> files in place (Docker keeps them open, so deleting can confuse the
-> daemon, `truncate -s 0` is safe):
->
-> ```bash
-> $ sudo find /var/lib/docker/containers/ -name "*-json.log" \
->     -exec truncate -s 0 {} +
-> ```
+```bash
+$ sudo journalctl -f -t anthias-server
+$ sudo journalctl --since "1 hour ago" -t anthias-viewer
+$ sudo journalctl -u anthias-host-agent
+```
 
-### Using `docker logs`
+The tags are in the table above.
 
-For instance, the command below will show you the logs from the server container:
+### Using `docker logs` or `docker compose logs`
+
+The journald driver still supports `docker logs`, by container name:
 
 ```bash
 $ docker logs -f anthias-anthias-server-1
 ```
 
-If you'd want to see the logs from other containers, simply replace the name
-of the container in the command above. Here's a table of the available containers:
-
-| Container Name | Description |
-| -------------- | ----------- |
-| `anthias-anthias-server-1` | uvicorn (HTTP, WebSocket at `/ws`, static + media file serving) |
-| `anthias-anthias-celery-1` | Celery worker (async tasks) |
-| `anthias-anthias-viewer-1` | Viewer service driving the screen |
-| `anthias-redis-1` | Redis (Celery broker + Channels layer) |
-| `anthias-anthias-caddy-1` | Caddy, the web front end on ports 80 and 443 (TLS, routing) |
-
-### Using `docker compose logs`
-
-> **Important**
->
-> Before running the succeeding commands, make sure that you're in the
-> `/home/${USER}/anthias` directory:
-> 
-> ```bash
-> $ cd /home/${USER}/anthias # e.g., /home/pi/anthias if the user is `pi`
-> ```
-
-If you'd like to see the logs of a specific container or service via Docker Compose,
-you can run the following:
+Or by service name with Docker Compose, from the Anthias directory:
 
 ```bash
-$ docker compose logs -f ${SERVICE_NAME}
-# e.g., docker compose logs -f anthias-server
+$ cd ~/anthias
+$ docker compose logs -f anthias-server
 ```
 
-Check out [this section](/docs/development/#understanding-the-components-that-make-up-anthias) of the Developer documentation page for the list of available services.
+### On balena
 
-### Using `journalctl`
+balena doesn't apply the journal tags above. Use the logs panel for the
+device in the [balenaCloud dashboard](https://dashboard.balena-cloud.com/),
+`balena logs <device-uuid>` from the balena CLI, or the REST API.
 
-Each service is tagged in the journal so you can pull logs without
-docker. Useful when you want to grep across a long time range or
-combine container logs with system logs:
+### Keeping logs across reboots
+
+Raspberry Pi OS keeps the journal in memory only (`Storage=volatile`), so
+logs from before the last reboot are gone, and Anthias leaves it that
+way: a persistent journal writes 20-30 MB a day to the SD card, which
+wears it out. The REST API and `journalctl` still work, they just start
+at the current boot.
+
+If you need history across reboots (an x86 player booting from an SSD,
+or a device you are debugging), turn persistence on with a journald
+drop-in that caps the size and sorts after Raspberry Pi OS's own
+`40-rpi-volatile-storage.conf`:
 
 ```bash
-$ sudo journalctl -f CONTAINER_TAG=anthias-server
-$ sudo journalctl --since "1 hour ago" CONTAINER_TAG=anthias-viewer
+$ sudo mkdir -p /var/log/journal /etc/systemd/journald.conf.d
+$ sudo systemd-tmpfiles --create --prefix /var/log/journal
+$ printf '[Journal]\nStorage=persistent\nSystemMaxUse=64M\n' | \
+    sudo tee /etc/systemd/journald.conf.d/90-persistent-journal.conf
+$ sudo systemctl restart systemd-journald
 ```
 
-The available tags are `anthias-server`, `anthias-viewer`,
-`anthias-celery`, `anthias-redis`, and (when TLS is enabled)
-`anthias-caddy`.
+Use a file name other than `99-anthias.conf`: the installer manages
+that one and removes it on upgrade unless its own
+`anthias_journal_persistent` Ansible variable is set. Delete the drop-in
+and restart journald to go back to the default.
 
-> **Note**
->
-> The Anthias installer adds your user to the `adm` group, which on
-> Debian/Raspberry Pi OS grants read access to the journal once you've
-> logged out and back in (and provided the journal is persistent, 
-> i.e. `/var/log/journal/` exists). On systems where that's set up you
-> can drop the `sudo` from the commands above.
-
-Journal retention is controlled by `systemd-journald` (see
-`/etc/systemd/journald.conf`, `SystemMaxUse` caps total disk usage,
-defaulting to 10% of the filesystem). If you want to free space
-immediately:
+To free space immediately:
 
 ```bash
 $ sudo journalctl --vacuum-time=2d   # drop entries older than 2 days
-$ sudo journalctl --vacuum-size=200M # cap journal at 200 MB
+$ sudo journalctl --vacuum-size=64M  # cap the journal at 64 MB
 ```
+
+> **Note**
+>
+> Devices upgraded from a release that used Docker's `json-file` driver
+> may still have the old log files on disk. To reclaim that space,
+> truncate them in place (Docker keeps them open, so deleting can
+> confuse the daemon; `truncate -s 0` is safe):
+>
+> ```bash
+> $ sudo find /var/lib/docker/containers/ -name "*-json.log" \
+>     -exec truncate -s 0 {} +
+> ```
 
 ## Enabling SSH
 
@@ -125,6 +162,11 @@ Alternatively, you can also run the following command:
 $ $HOME/anthias/bin/run_upgrade.sh
 ```
 
+Before starting the new release, the upgrade checks that every image it
+pulled was signed by the Anthias release pipeline (and the WiFi setup
+image by its own upstream release). If a check fails, the upgrade stops
+and the device keeps running the release it already had.
+
 ## Accessing the REST API
 
 The full endpoint reference is on the [API page](/api/): endpoints, parameters, and response schemas grouped by tag.
@@ -143,6 +185,8 @@ When **Authentication** is turned on in Settings, scripts and other devices shou
 $ curl -H 'Authorization: Bearer anthias_…' https://<device-ip>/api/v2/info
 ```
 
+Until you [upload a trusted certificate](#tls--ssl), the device uses its own self-signed one, so add `-k` (or `--cacert`) to `curl`.
+
 Tokens are only accepted over HTTPS. A request that sends one over plain `http://` gets `401 Unauthorized`; if that happened on a network you don't trust, revoke the token. A token can manage content, playback and the screen through the API, but it can't sign in to the web interface, create more tokens, or create or restore backups (a backup holds the device's secret key and your password hash). Use the web interface for backups. To cut off access, click **Revoke** next to the token; anything still using it gets `401 Unauthorized` from then on. Changing your password does not revoke tokens. Restoring a backup revokes every token and ends multi-screen management, so create the tokens you need again afterwards.
 
 Tokens only apply while authentication is on:
@@ -154,7 +198,7 @@ HTTP Basic auth (`curl -u user:pass …`) still works for older clients but is d
 
 ### Managing several screens from one (multi-screen)
 
-One Anthias device (the controller) can publish the same playlist to the other Anthias screens on your network, show their status and health, and reboot or control them. Screens join with **join information** copied from the controller, which pins the controller's certificate, and the two sides talk over a separate management port, **8443**, using each device's own self-signed certificate.
+One Anthias device (the controller) can publish the same playlist to the other Anthias screens on your network, show their status and health, and reboot or control them. Screens join with **join information** copied from the controller, which pins the controller's certificate, and are only managed once you approve them on the controller. The two sides then talk over a separate management port, **8443**, using mutual TLS with certificates the controller issues. A managed screen's own web interface is turned off; you change it from the controller.
 
 See [Multi-screen management](/docs/multi-screen/) for the full reference: which devices to use as controller and as screens, setup, publishing, health monitoring, security, and troubleshooting.
 
@@ -203,9 +247,10 @@ $ ./bin/disable_ssl.sh
 The screen's own certificate also identifies it to other Anthias
 screens, which recognize it by its fingerprint (shown under **Settings →
 HTTPS certificate → Screen identity**). Uploading a web certificate never
-changes it. It lives in `~/.anthias/ssl/node/` and is deliberately left
-out of backups, so restoring one screen's backup onto another does not
-give both the same identity.
+changes it. It lives in `~/.anthias/ssl/node/` and is left out of
+backups unless you turn on **Include this device's keys** (which
+encrypts it with a password you choose), so restoring one screen's
+ordinary backup onto another does not give both the same identity.
 
 Upgrading from an older `bin/enable_ssl.sh` setup is automatic: a
 bring-your-own certificate becomes the uploaded web certificate, a

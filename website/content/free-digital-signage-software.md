@@ -29,7 +29,7 @@ Add a screen with an HDMI input and that is the whole bill of materials. Your on
 
 Upload an image or video, or point a screen at any web page, then set how long each item shows and give it a start and end date. Anthias loops the active playlist automatically and plays uploaded media from local storage, so the screen keeps running if the network drops.
 
-Paste a YouTube link and the video is downloaded to play locally, without buffering and without ads or recommended videos appearing over your content. Scheduling goes down to days of the week and a daily time window, uploads never interrupt what is on screen, and a single backup file holds your settings and asset list so you can restore it later or move it to a new device.
+Paste a YouTube link and the video is downloaded to play locally, without buffering and without ads or recommended videos appearing over your content. Scheduling goes down to days of the week and a daily time window, uploads never interrupt what is on screen, and a single backup file holds your settings and assets so you can restore it later or move it to a new device.
 
 There is also a [REST API](/api/) if you would rather drive content from a script than by hand, and a library of [free signage apps](https://signage-apps.com/?utm_source=anthias.screenly.io&utm_medium=referral&utm_campaign=free-software) that drop straight in, including [weather](https://signage-apps.com/weather/?utm_source=anthias.screenly.io&utm_medium=referral&utm_campaign=free-software), news feeds and a [world clock](https://signage-apps.com/world-clock/?utm_source=anthias.screenly.io&utm_medium=referral&utm_campaign=free-software).
 
@@ -37,7 +37,7 @@ There is also a [REST API](/api/) if you would rather drive content from a scrip
 
 Free is only useful if you know the trade. Each screen runs its own copy of Anthias. With [multi-screen management](/docs/multi-screen/), one of them can publish its playlist to the rest on the same network, but every managed screen then shows the same playlist: there is no setting different content for different screens from one place, and no management across sites or over the internet. You host it yourself, and support comes from the [community forum](https://forums.screenly.io) and [GitHub](https://github.com/Screenly/Anthias/issues) rather than a helpdesk with an SLA.
 
-Setting up several devices is less repetitive than that makes it sound. A backup file holds your settings and asset list so you can restore it onto the next device, a fleet can be deployed and updated over the air through [Balena](/docs/balena/), and the [built-in importer](/docs/import-content/) brings a library across from Yodeck, ScreenCloud, piSignage or Xibo.
+Setting up several devices is less repetitive than that makes it sound. A backup file holds your settings and assets so you can restore it onto the next device, a fleet can be deployed and updated over the air through [Balena](/docs/balena/), and the [built-in importer](/docs/import-content/) brings a library across from Yodeck, ScreenCloud, piSignage or Xibo.
 
 For one screen, or a handful on one network that show the same content, none of that is a problem and nothing is held back.
 

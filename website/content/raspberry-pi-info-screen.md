@@ -67,11 +67,11 @@ Uploaded images and video play from the Pi's local storage, so a network outage 
 
 For an install that should last years, use a reputable microSD card and the official power supply, or move a Pi 5 onto an [SSD](/docs/pi5-ssd/) to avoid card wear. When you add a file, the dashboard shows a **Processing** badge while it is prepared and a **Failed** badge with a short explanation if something is wrong, so problems surface in the interface rather than in a log file.
 
-Anthias can also tell you whether the connected TV is actually powered on, which is the difference between spotting a dark screen from your desk and finding out when someone complains. The dashboard shows system information at a glance and flags when an update is available, and the device can be restarted or shut down remotely. If the screen sits somewhere public, the interface can be put behind a password and served over HTTPS.
+Anthias can also tell you whether the connected TV is actually powered on, which is the difference between spotting a dark screen from your desk and finding out when someone complains. The dashboard shows system information at a glance and flags when an update is available, and the device can be restarted or shut down remotely. The interface is served over HTTPS out of the box, and if the screen sits somewhere public it can be put behind a password.
 
 ## More than one screen
 
-Two or three info screens means two or three Pis, but with [multi-screen management](/docs/multi-screen/) you update them from one: make one device the controller, build the content there, and publish it to every screen on the same network. The controller also shows which screens are online and warns about low disk space or a weak power supply. A backup file captures your settings and asset list for setting up the next device, and a fleet can be deployed and updated over the air through [Balena](/docs/balena/).
+Two or three info screens means two or three Pis, but with [multi-screen management](/docs/multi-screen/) you update them from one: make one device the controller, build the content there, and publish it to every screen on the same network. The controller also shows which screens are online and warns about low disk space or a weak power supply. A backup file captures your settings and assets for setting up the next device, and a fleet can be deployed and updated over the air through [Balena](/docs/balena/).
 
 Every managed screen shows the same content, and they all have to be on the same network as the controller. For a building or a floor that is fine. For different content per screen, several sites, or a large estate it is the wrong tool, and it is better to say so now than after you have bought the hardware.
 

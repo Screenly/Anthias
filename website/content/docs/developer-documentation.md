@@ -14,10 +14,11 @@ Here is a high-level overview of the different components that make Anthias:
 
 These components and their dependencies are mostly installed and handled with Ansible and Docker.
 
-* The **web app** component (`anthias-server`) serves every HTTP route, behind the Caddy front end, via uvicorn (ASGI). It runs the Django front-end + REST API, serves static assets via WhiteNoise, streams uploaded media at `/anthias_assets/`, and exposes the WebSocket endpoint at `/ws` via Django Channels. `/ws` follows the same authentication switch as the rest of the app: with **Authentication** set to **Basic** in Settings, the handshake must carry a logged-in browser session or it is refused; with authentication disabled the endpoint is open, like every other surface on the device. Authorization does not outlive the handshake. Turning authentication on, or rotating the operator's username or password (from the settings page, the API, or the Django admin), closes every open socket; with authentication enabled, any socket that survives the close — the close is best-effort, since it travels over Redis — stops receiving updates from that moment on. (Rotating credentials while authentication is *disabled* closes the sockets too, but a survivor keeps working: in that mode the device is open by contract and there are no credentials in force to revoke.) (That last guarantee covers changes made through the web app, which is the process holding the sockets; a password changed by `manage.py changepassword` on the device relies on the close alone.) Turning authentication *off* also closes them, but a socket that survives that close keeps working, because the device is open by contract in that mode and there is nothing left to revoke. It speaks plain HTTP inside the Docker network only; the **anthias-caddy** front end terminates TLS on ports 80 and 443 for every install (see [TLS / SSL](/docs/#tls--ssl)).
+* The **web app** component (`anthias-server`) serves every HTTP route, behind the Caddy front end, via uvicorn (ASGI). It runs the Django front-end + REST API, serves static assets via WhiteNoise, streams uploaded media at `/anthias_assets/`, and exposes the WebSocket endpoint at `/ws` via Django Channels. `/ws` follows the same authentication switch as the rest of the app: with **Authentication** set to **Basic auth** in Settings, the handshake must carry a logged-in browser session or it is refused; with authentication disabled the endpoint is open, like every other surface on the device. Authorization does not outlive the handshake. Turning authentication on, or rotating the operator's username or password (from the settings page, the API, or the Django admin), closes every open socket; with authentication enabled, any socket that survives the close — the close is best-effort, since it travels over Redis — stops receiving updates from that moment on. (Rotating credentials while authentication is *disabled* closes the sockets too, but a survivor keeps working: in that mode the device is open by contract and there are no credentials in force to revoke.) (That last guarantee covers changes made through the web app, which is the process holding the sockets; a password changed by `manage.py changepassword` on the device relies on the close alone.) Turning authentication *off* also closes them, but a socket that survives that close keeps working, because the device is open by contract in that mode and there is nothing left to revoke. It speaks plain HTTP inside the Docker network only; the **anthias-caddy** front end terminates TLS on ports 80 and 443 for every install (see [TLS / SSL](/docs/#tls--ssl)).
 * The **viewer** (`anthias-viewer`) is what drives the screen (e.g., shows web page, image or video). It fetches media from `anthias-server` over HTTP.
 * The **Celery** (`anthias-celery`) component is for asynchronously queueing and executing tasks outside the HTTP request-response cycle (e.g., yt-dlp downloads, asset cleanup). It pushes asset-update events to connected WebSocket clients via the Redis-backed Channels layer.
 * **Redis** (`redis`) is used as the Celery broker/result backend and as the Channels channel layer.
+* **Caddy** (`anthias-caddy`) is the web front end on every install. It owns host ports 80 and 443 (and 8443 for [multi-screen management](/docs/multi-screen/) while the device is a controller or a managed screen), terminates TLS and proxies to `anthias-server`. `anthias-server` generates its configuration.
 * The **database** component uses **SQLite** for storing the assets information.
 
 ## Dockerized development environment
@@ -46,12 +47,11 @@ $ ./bin/start_development_server.sh
 
 > **Note**
 >
-> Running the script will install Python 3.11, [pyenv](https://github.com/pyenv/pyenv),
-> and [uv](https://docs.astral.sh/uv/) inside a Docker container on your machine.
-> This is to ensure that the development environment is consistent across different
-> machines.
->
-> The script currently supports Debian-based systems and macOS.
+> The script first renders the Dockerfiles from their templates inside a helper
+> Docker container (Python and [uv](https://docs.astral.sh/uv/) run there, not on
+> your machine), then builds and starts the `anthias-server`, `anthias-celery` and
+> `redis` containers from `docker-compose.dev.yml`. This keeps the development
+> environment consistent across different machines.
 
 Running the command above will start the development server and you should be able to
 access the web interface at `http://localhost:8000`.
@@ -117,11 +117,20 @@ $ docker compose \
 
 $ docker compose \
     -f docker-compose.test.yml \
-    exec anthias-test ./manage.py test --exclude-tag=integration
+    exec anthias-test pytest -n auto -m "not integration"
 
 $ docker compose \
     -f docker-compose.test.yml \
-    exec anthias-test ./manage.py test --tag=integration
+    exec -e ANTHIAS_INTEGRATION_TEST=1 anthias-test \
+    pytest -m integration --reuse-db
+```
+
+The unit tests (everything except the integration suite) can also run directly on
+your machine, without Docker or Redis:
+
+```bash
+$ uv sync --group test
+$ uv run pytest -m "not integration"
 ```
 
 ### The QA checklist
@@ -213,36 +222,37 @@ $ uv run ruff check /path/to/file.py
 ## Managing releases
 ### Creating a new release
 
-Check what the latest release is:
+Anthias uses CalVer versions, `YYYY.0M.MICRO` (for example `2026.11.1`), tagged
+as `v2026.11.1`. To cut a release:
+
+1. Bump the version in `package.json`, `pyproject.toml` (both zero-padded, e.g.
+   `2026.11.1`) and `uv.lock` (strict semver, without the leading zero: `2026.6.0` for
+   `2026.06.0`), and merge that to `master`.
+2. Wait for the `master` Docker build to finish for every board. The release
+   pipeline checks that those images exist.
+3. Create the GitHub release as a draft, so the tag isn't created yet:
 
 ```bash
-$ git pull
-$ git tag
-
-# Running the `git tag` command should output something like this:
-# 0.16
-# ...
-# v0.18.6
+$ gh release create v2026.11.1 \
+    --draft --generate-notes \
+    --title 2026.11.1 \
+    --target "$(git rev-parse origin/master)"
 ```
 
-Create a new release:
+4. Publish it. Publishing creates the tag and starts the pipeline that deploys
+   to the balena fleets and builds the disk images attached to the release:
 
 ```bash
-$ git tag -a v0.18.7 -m "Test new automated disk images"
-```
-
-Push release:
-```bash
-$ git push origin v0.18.7
+$ gh release edit v2026.11.1 --draft=false --latest
 ```
 
 ### Delete a broken release
 
-```bash
-$ git tag -d v0.18.5                         [±master ✓]
-Deleted tag 'v0.18.5' (was 9b86c39)
+If something is wrong while the release is still a draft, delete the draft;
+no tag has been created yet:
 
-$ git push --delete origin v0.18.5           [±master ✓]
+```bash
+$ gh release delete v2026.11.1
 ```
 
 ## Directories and files explained
@@ -265,11 +275,11 @@ present in a Raspberry Pi with Anthias installed.
 
 ### `/etc/systemd/system/`
 
-* `anthias-host-agent.service`: starts the Python script `host_agent.py`, which subscribes from the Redis component and performs a system call to shutdown or reboot the device when the message is received.
+* `anthias-host-agent.service`: runs the host agent (`python -m anthias_host_agent`, from `src/anthias_host_agent/`), which publishes host facts (such as memory and board model) into Redis for the containers, and listens on Redis for commands such as rebooting or shutting down the device.
 
 ### `/etc/sudoers.d/anthias_overrides`
 
-* `sudoers` configuration file that allows pi user to execute certain `sudo` commands without being a superuser (i.e., `root`)
+* `sudoers` configuration file that allows the Anthias user to execute certain `sudo` commands without being a superuser (i.e., `root`)
 
 ### `/usr/share/plymouth/themes/anthias`
 
@@ -286,7 +296,7 @@ export QT_QPA_EGLFS_DEBUG=1
 ```
 
 The Anthias WebView is a custom-built web browser based on the [Qt](https://www.qt.io/) toolkit framework.
-The browser is assembled with a Dockerfile and built by a `src/anthias_webview/build_qt#.sh` script.
+The browser is assembled with a Dockerfile (`src/anthias_webview/Dockerfile`); the Qt 5 build for the 32-bit boards is driven by `src/anthias_webview/build_qt5.sh`.
 
 For further info on these files and more, browse the [`anthias_webview` source directory on GitHub](https://github.com/Screenly/Anthias/tree/master/src/anthias_webview).
 

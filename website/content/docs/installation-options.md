@@ -116,6 +116,7 @@ $ bash <(curl -sL https://install-anthias.srly.io)
 
 You'll be prompted with the following questions:
 
+* The URL of your HTTP proxy, if this host reaches the internet only through one (leave it blank otherwise).
 * Do you still want to continue?
 * Would you like Anthias to manage the network for you?
 * Which version of Anthias would you like to install?
@@ -153,15 +154,16 @@ Opting for network management will enable and configure the [NetworkManager](htt
 
 #### Prompt: Version Selection
 
-You can choose between the following choices: `latest` and `tag`.
+The menu lists `latest`, the most recent releases, and `other`.
 
 * Selecting `latest` will install the version from the `master` branch.
-* Selecting `tag` will prompt you to enter a specific tag to install.
+* Selecting one of the listed releases will install that release.
+* Selecting `other` will prompt you to enter a specific tag to install.
 * Do take note that `latest` is a rolling release, so you'll always get the latest changes.
 
 ##### Installing from a Specific Tag
 
-Select this option if you want to install a pinned version of Anthias. You'll be prompted to enter
+Select `other` if you want to install a pinned version of Anthias that isn't listed. You'll be prompted to enter
 a specific tag to install. You can find the tags in the
 [releases](https://github.com/Screenly/Anthias/releases) page.
 
@@ -170,19 +172,17 @@ If it's not, you need to run the script again and enter a valid tag.
 
 #### Prompt: Full System Upgrade
 
-If you've selected **Yes** when prompted for an upgrade &ndash; i.e., "Would you like to perform a full system upgrade as well?"
-&ndash; you'll get the following message when the installer is almost done executing:
+Selecting **Yes** when prompted "Would you like to perform a full system upgrade as well?" also upgrades the operating system's packages during the installation.
+
+Either way, the installer starts the Anthias containers itself, and when it is done it shows the following message:
 
 ```
-Please reboot and run `/home/$USER/anthias/bin/upgrade_containers.sh` to complete the installation.
+A reboot is required to complete the installation.
 
-Would you like to reboot now?
+Do you want to reboot now?
 ```
 
-You have the option to reboot now or later. On the next boot, make sure to run
-`upgrade_containers.sh`, as mentioned above.
-
-Otherwise, if you've selected **No** for the system upgrade, then you don't need to do a reboot for the containers to be started. However, it's still recommended to do a reboot.
+You have the option to reboot now or later, but the installation is only complete after a reboot.
 
 ## Installing with Balena
 
