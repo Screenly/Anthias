@@ -59,3 +59,9 @@ application = ProtocolTypeRouter(
 from anthias_server.lib.caddy import start_background_apply
 
 start_background_apply()
+
+# A managed screen pushes its status to its controller over a WebSocket
+# (lib.push); it idles while the screen is not managed.
+from anthias_server.lib.push import start_background_push
+
+start_background_push()

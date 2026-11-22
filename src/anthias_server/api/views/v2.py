@@ -1486,32 +1486,36 @@ class InfoViewV2(InfoViewMixin):
     )
     @authorized
     def get(self, request: Request) -> Response:
-        viewlog = 'Not yet implemented'
-
-        # Calculate disk space
-        slash = statvfs('/')
-        free_space = filesizeformat(slash.f_bavail * slash.f_frsize)
-        display_power = r.get('display_power')
-
         return Response(
             {
-                'viewlog': viewlog,
-                'loadavg': diagnostics.get_load_avg()['15 min'],
-                'free_space': free_space,
-                'display_power': display_power,
+                'viewlog': 'Not yet implemented',
+                **self.health_payload(),
                 'up_to_date': is_up_to_date(),
-                'anthias_version': self.get_anthias_version(),
-                'device_model': self.get_device_model(),
-                'uptime': self.get_uptime(),
-                'memory': self.get_memory(),
-                'under_voltage': self.get_under_voltage(),
-                'storage': self.get_storage(),
                 'ip_addresses': self.get_ip_addresses(),
                 'mac_address': get_node_mac_address(),
                 'host_user': getenv('HOST_USER'),
                 'time': self.get_time(),
             }
         )
+
+    def health_payload(self) -> dict[str, Any]:
+        """The health fields of this response, without a request.
+
+        Also what a managed screen pushes to its controller
+        (``lib.push``), so both paths report the same values.
+        """
+        slash = statvfs('/')
+        return {
+            'loadavg': diagnostics.get_load_avg()['15 min'],
+            'free_space': filesizeformat(slash.f_bavail * slash.f_frsize),
+            'display_power': r.get('display_power'),
+            'anthias_version': self.get_anthias_version(),
+            'device_model': self.get_device_model(),
+            'uptime': self.get_uptime(),
+            'memory': self.get_memory(),
+            'under_voltage': self.get_under_voltage(),
+            'storage': self.get_storage(),
+        }
 
 
 class IntegrationsViewV2(APIView):

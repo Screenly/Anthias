@@ -624,7 +624,10 @@ def test_ui_proxies_strip_the_listener_header() -> None:
     handler = caddy.proxy_handler()
 
     assert handler['upstreams'] == [{'dial': 'anthias-server:8080'}]
-    assert handler['headers']['request']['delete'] == ['X-Anthias-Listener']
+    assert handler['headers']['request']['delete'] == [
+        'X-Anthias-Listener',
+        'X-Anthias-Client-Fingerprint',
+    ]
 
 
 def test_edge_limits_leave_bodies_unbounded() -> None:
