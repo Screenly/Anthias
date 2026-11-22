@@ -269,17 +269,34 @@ Management traffic never uses passwords and never leaves your network:
   Uploading a certificate for the web interface doesn't affect it.
 * **Tokens are revocable and stored safely.** The screen keeps only a
   hash of the controller's token. The controller stores screen tokens
-  encrypted, with a key that is not part of backups.
+  encrypted, with a key that is only in a backup if you choose to
+  include the device keys (below).
 
 ### Backups
 
-A device's identity certificate is not included in backups. Restoring
-one screen's backup onto another device does not clone its identity.
-The same goes for the controller's certificate authority and token
-key, and for a screen's client certificate: if you restore a
-controller's backup onto a different device, the screens have to join
-again. Keeping the authority's private key out of backups means a
-copied backup file can never be used to vouch for a device.
+By default, a backup holds no private keys: not the device's identity
+certificate, not the controller's certificate authority, not the key
+that protects stored tokens. Restoring such a backup onto another
+device does not clone its identity, and a copied backup file can never
+be used to vouch for a device. The catch: if you restore a
+controller's backup onto new hardware, every screen has to join again.
+
+To move a controller (or a screen) to new hardware without that, turn
+on **Include this device's keys** under **Settings → Backup &
+restore** and choose a password before clicking **Get backup**. The
+keys are added to the backup encrypted with that password
+(AES-256-GCM, with the key derived from your password by scrypt), the
+same idea as the encrypted configuration backups in pfSense and
+OPNsense. They can't be added without a password.
+
+To restore them, enter that password in **Keys password** before
+uploading the backup. Without it, everything else is restored and the
+keys are left out. A wrong password restores nothing.
+
+Keep a backup with keys as safe as the device itself: whoever has it
+and the password can stand in for the controller. Restore it on one
+device only, and retire the old one; two controllers with the same
+keys would both answer for the same screens.
 
 ## Leaving and removing
 

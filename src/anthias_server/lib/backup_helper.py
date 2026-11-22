@@ -12,6 +12,7 @@ import uuid
 from collections.abc import AsyncGenerator, Generator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from enum import StrEnum
 from os import getenv, makedirs, path, remove
 from typing import Any
 
@@ -371,6 +372,10 @@ class BackupRecoverError(Exception):
     """Raised when a backup archive cannot be safely recovered."""
 
 
+class DeviceKeysError(BackupRecoverError):
+    """The device keys in a backup could not be opened (wrong password)."""
+
+
 class IncompatibleBackupError(BackupRecoverError):
     """Raised when a backup was made by a newer, incompatible version.
 
@@ -425,22 +430,41 @@ def _current_schema_version() -> int | None:
         return None
 
 
-def _build_manifest() -> dict[str, Any]:
-    return {
+def _build_manifest(device_keys: bool = False) -> dict[str, Any]:
+    manifest: dict[str, Any] = {
         'format': BACKUP_FORMAT_VERSION,
         'anthias_version': get_anthias_release(),
         'schema_version': _current_schema_version(),
         'created_at': datetime.now(UTC).isoformat(),
     }
+    if device_keys:
+        manifest['device_keys'] = True
+    return manifest
 
 
-def _add_manifest(tar: tarfile.TarFile) -> None:
-    """Write the version manifest into an archive as it is built."""
-    payload = json.dumps(_build_manifest(), indent=2).encode('utf-8')
-    info = tarfile.TarInfo(BACKUP_MANIFEST_NAME)
+def _add_bytes(tar: tarfile.TarFile, name: str, payload: bytes) -> None:
+    info = tarfile.TarInfo(name)
     info.size = len(payload)
     info.mtime = int(datetime.now(UTC).timestamp())
+    info.mode = 0o600
     tar.addfile(info, io.BytesIO(payload))
+
+
+def _add_manifest(
+    tar: tarfile.TarFile, device_keys: bytes | None = None
+) -> None:
+    """Write the version manifest (and the opt-in, encrypted device
+    keys, see ``lib.identity_backup``) into an archive as it is built."""
+    from anthias_server.lib import identity_backup
+
+    manifest = _build_manifest(device_keys is not None)
+    _add_bytes(
+        tar,
+        BACKUP_MANIFEST_NAME,
+        json.dumps(manifest, indent=2).encode('utf-8'),
+    )
+    if device_keys is not None:
+        _add_bytes(tar, identity_backup.MEMBER, device_keys)
 
 
 def _read_manifest(tar: tarfile.TarFile) -> dict[str, Any] | None:
@@ -546,7 +570,7 @@ def backup_archive_name(name: str = default_archive_name) -> str:
     )
 
 
-def stream_backup() -> Generator[bytes]:
+def stream_backup(device_keys: bytes | None = None) -> Generator[bytes]:
     """Yield a backup tar.gz as it is being built.
 
     The download path used to write the whole archive to disk before
@@ -580,7 +604,7 @@ def stream_backup() -> Generator[bytes]:
                     compresslevel=BACKUP_COMPRESSLEVEL,
                 ) as tar,
             ):
-                _add_manifest(tar)
+                _add_manifest(tar, device_keys)
                 _add_runtime_tree(tar, home)
         except BrokenPipeError:
             logger.info('backup download cancelled by the client')
@@ -607,7 +631,9 @@ def stream_backup() -> Generator[bytes]:
             raise produce_error[0]
 
 
-async def astream_backup() -> AsyncGenerator[bytes]:
+async def astream_backup(
+    device_keys: bytes | None = None,
+) -> AsyncGenerator[bytes]:
     """Async front-end to stream_backup() for the ASGI download view.
 
     StreamingHttpResponse only *streams* an asynchronous iterator under
@@ -632,7 +658,7 @@ async def astream_backup() -> AsyncGenerator[bytes]:
     wedging unrelated sync work.
     """
     loop = asyncio.get_running_loop()
-    gen = stream_backup()
+    gen = stream_backup(device_keys)
     executor = ThreadPoolExecutor(
         max_workers=1, thread_name_prefix='backup-stream-reader'
     )
@@ -741,7 +767,44 @@ def _extract_asset_atomically(
         raise
 
 
-def recover(file_path: str) -> None:
+class KeysRestore(StrEnum):
+    """What happened to the device keys a backup may carry."""
+
+    NONE = 'none'  # the backup has none
+    RESTORED = 'restored'
+    SKIPPED = 'skipped'  # present, but no password was given
+
+
+def _read_device_keys(
+    tar: tarfile.TarFile, password: str | None
+) -> tuple[KeysRestore, dict[str, bytes]]:
+    """Open the device keys before anything is written.
+
+    A wrong password raises (BackupRecoverError), so a restore never
+    goes half way and then fails on the keys.
+    """
+    from anthias_server.lib import identity_backup
+
+    try:
+        member = tar.getmember(identity_backup.MEMBER)
+    except KeyError:
+        return KeysRestore.NONE, {}
+    if not password:
+        return KeysRestore.SKIPPED, {}
+    fobj = tar.extractfile(member) if member.isfile() else None
+    if fobj is None or member.size > identity_backup.MAX_BUNDLE_BYTES:
+        raise DeviceKeysError('The device keys in this backup are unreadable.')
+    try:
+        files = identity_backup.unpack(fobj.read(), password)
+    except identity_backup.IdentityBackupError as exc:
+        raise DeviceKeysError(str(exc)) from exc
+    return KeysRestore.RESTORED, files
+
+
+def recover(file_path: str, keys_password: str | None = None) -> KeysRestore:
+    """Restore a backup. ``keys_password`` opens its device keys."""
+    from anthias_server.lib import identity_backup
+
     home = getenv('HOME')
     if not home:
         logger.error('No HOME variable')
@@ -760,6 +823,7 @@ def recover(file_path: str) -> None:
         # write anything. Raises IncompatibleBackupError, which the
         # recover views surface with its "upgrade first" message.
         _check_backup_compatibility(_read_manifest(tar))
+        keys_state, key_files = _read_device_keys(tar, keys_password)
 
         # Manually iterate so each member is validated before any
         # filesystem write. Avoids tarfile.extractall's older
@@ -774,9 +838,12 @@ def recover(file_path: str) -> None:
         restored_dbs: set[str] = set()
         try:
             for member in tar.getmembers():
-                # The manifest is metadata read above, not runtime state;
-                # never write it to disk.
-                if member.name == BACKUP_MANIFEST_NAME:
+                # The manifest and the device keys were read above; they
+                # are not runtime state and never go to disk as-is.
+                if member.name in (
+                    BACKUP_MANIFEST_NAME,
+                    identity_backup.MEMBER,
+                ):
                     continue
                 # Archives written before the sidecars were dropped still
                 # carry them. They are not unsafe in the path-traversal
@@ -827,4 +894,8 @@ def recover(file_path: str) -> None:
     # database up to what this system expects.
     _upgrade_restored_database()
 
+    if key_files:
+        identity_backup.install(key_files)
+
     remove(file_path)
+    return keys_state
