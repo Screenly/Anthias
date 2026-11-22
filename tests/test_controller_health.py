@@ -119,7 +119,7 @@ def test_problems_name_each_warning() -> None:
         ('low_disk', 'Low disk space: 512.0 MB free'),
         ('storage', 'Storage failing'),
         ('under_voltage', 'Under-voltage now'),
-        ('low_memory', 'Low memory: 40 MiB free'),
+        ('low_memory', 'Low memory: 40.0\xa0MB free'),
     ]
 
 
@@ -135,7 +135,7 @@ def test_under_voltage_earlier_in_this_boot_is_still_reported() -> None:
 def test_summary_line() -> None:
     reading = health.health_from_info(INFO)
     assert health.summary_line(reading) == (
-        'Disk 17.9 GB free · RAM 217 MiB free · up 2 days'
+        'Disk 17.9 GB free · RAM 217.0\xa0MB free · up 2 days'
     )
     assert health.summary_line({'uptime_hours': 0.4}) == 'up <1 h'
     assert health.summary_line({'uptime_hours': 5.6}) == 'up 6 h'
@@ -250,7 +250,7 @@ def test_screens_page_shows_health_and_warnings(
 
     body = client.get(reverse('controller:screens_table')).content.decode()
 
-    assert 'Disk 17.9 GB free · RAM 217 MiB free · up 2 days' in body
+    assert 'Disk 17.9 GB free · RAM 217.0\xa0MB free · up 2 days' in body
     assert 'Low disk space: 300.0 MB free' in body
     assert '1 needs attention' in body
 

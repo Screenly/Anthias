@@ -104,7 +104,7 @@ class ControllerJoinView(APIView):
             node_name=pending.name,
             detail=(
                 f'{"asked" if created else "asked again"} to join from '
-                f'{pending.host}:{pending.port}, check code '
+                f'{pending.host}, check code '
                 f'{pending.check_code}; waiting for approval'
             ),
         )

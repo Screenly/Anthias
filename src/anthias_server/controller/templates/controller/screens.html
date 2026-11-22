@@ -18,28 +18,89 @@
       <p class="empty-state__title">Controller mode is off</p>
       <p class="empty-state__description">
         {% if not auth_enabled %}
-        Turn on authentication, then turn on <strong>Controller mode</strong> in
-        Settings. A controller holds access to every screen it manages, so it
+        Turn on authentication, then choose <strong>Make this a controller</strong>
+        under <strong>Settings → Multi-screen management</strong>. A controller holds access to every screen it manages, so it
         must not be open to everyone on the network.
         {% else %}
-        Turn on <strong>Controller mode</strong> in Settings to manage other
+        Choose <strong>Make this a controller</strong> under
+        <strong>Settings → Multi-screen management</strong> to manage other
         screens from here.
         {% endif %}
       </p>
-      <a class="app-btn app-btn-primary" href="{% url 'anthias_app:settings' %}#controller-mode">
+      <a class="app-btn app-btn-primary" href="{% url 'anthias_app:settings' %}#management">
         <i class="ti ti-settings" aria-hidden="true"></i><span>Open settings</span>
       </a>
     </div>
   </section>
   {% else %}
 
-  <section class="settings-section" id="join-information">
+  {% include "controller/_screens_table.html" %}
+
+  {% if node_count %}
+  <section class="settings-section mt-4" id="publish">
     <header>
       <div>
-        <h2>Join information</h2>
-        <p class="settings-section__lede">To add a screen, copy this and paste it into the screen's <strong>Settings → Multi-screen management</strong>. The screen then joins over an encrypted connection, pinned to this device's certificate. You can reuse it for any number of screens.</p>
+        <h2>Publish</h2>
+        <p class="settings-section__lede">
+          Makes every screen's playlist match this screen's {{ manifest_count }} asset{{ manifest_count|pluralize }},
+          including schedules and order. Assets added directly on a managed screen are removed.
+          Unchanged files are not uploaded again.
+        </p>
+        {% if manifest_skipped %}
+        <p class="settings-section__lede">Not included right now: {{ manifest_skipped|join:", " }}.</p>
+        {% endif %}
+      </div>
+      <div class="settings-section__actions">
+        <form method="post" action="{% url 'controller:screens_publish' %}" class="inline m-0"
+          onsubmit="return confirm('Publish to all {{ node_count }} screen{{ node_count|pluralize }}? Their playlists are replaced with this screen\'s {{ manifest_count }} asset{{ manifest_count|pluralize }}, and assets added directly on them are removed.');">
+          {% csrf_token %}
+          <input type="hidden" name="target" value="all">
+          <button type="submit" class="app-btn app-btn-primary" id="btn-publish-all">
+            <i class="ti ti-upload" aria-hidden="true"></i><span>Publish to all screens</span>
+          </button>
+        </form>
       </div>
     </header>
+    <div class="screens__control">
+      <h3 class="screens__control-title">Control all screens</h3>
+      <div class="screens__actions">
+        {% for command, label in commands.items %}{% if command != 'reboot' %}
+        <form method="post" action="{% url 'controller:screens_command' %}" class="inline m-0">
+          {% csrf_token %}
+          <input type="hidden" name="target" value="all">
+          <input type="hidden" name="command" value="{{ command }}">
+          <button type="submit" class="app-btn app-btn-outline-dark" id="btn-all-{{ command }}"><span>{{ label }}</span></button>
+        </form>
+        {% endif %}{% endfor %}
+        <form method="post" action="{% url 'controller:screens_refresh' %}" class="inline m-0">
+          {% csrf_token %}
+          <button type="submit" class="app-btn app-btn-outline-dark" id="btn-refresh">
+            <i class="ti ti-reload" aria-hidden="true"></i><span>Check now</span>
+          </button>
+        </form>
+        <form method="post" action="{% url 'controller:screens_command' %}" class="inline m-0 screens__danger"
+          onsubmit="return confirm('Reboot every managed screen? This screen is not rebooted.');">
+          {% csrf_token %}
+          <input type="hidden" name="target" value="all">
+          <input type="hidden" name="command" value="reboot">
+          <button type="submit" class="app-btn app-btn-danger" id="btn-all-reboot">
+            <i class="ti ti-refresh" aria-hidden="true"></i><span>Reboot all</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% comment %}
+    The visible title lives in the summary, which assistive tech exposes as a
+    button and so flattens any heading inside it. The sr-only h2 keeps the
+    section in heading navigation.
+  {% endcomment %}
+  <h2 class="sr-only" id="join-information-title">Join information</h2>
+  <details class="settings-section mt-4 screens__join" id="join-information" {% if not node_count %}open{% endif %} aria-labelledby="join-information-title">
+    <summary class="screens__join-summary"><span class="screens__join-title">Join information</span></summary>
+    <p class="settings-section__lede">To add a screen, paste this into the screen's <strong>Settings → Multi-screen management</strong>. You can reuse it for any number of screens; each one still needs your approval here.</p>
     {% if join_error %}
     <p class="api-tokens__error" role="alert">{{ join_error }}</p>
     {% else %}
@@ -73,53 +134,9 @@
       </button>
     </form>
     {% endif %}
-  </section>
+  </details>
 
-  <section class="settings-section mt-4" id="publish">
-    <header>
-      <div>
-        <h2>Publish</h2>
-        <p class="settings-section__lede">
-          Makes every screen's playlist match this screen's {{ manifest_count }} asset{{ manifest_count|pluralize }},
-          including schedules and order. Assets added directly on a managed screen are removed.
-          Unchanged files are not uploaded again.
-        </p>
-        {% if manifest_skipped %}
-        <p class="settings-section__lede">Not included right now: {{ manifest_skipped|join:", " }}.</p>
-        {% endif %}
-      </div>
-    </header>
-    <div class="screens__actions">
-      <form method="post" action="{% url 'controller:screens_publish' %}" class="inline m-0">
-        {% csrf_token %}
-        <input type="hidden" name="target" value="all">
-        <button type="submit" class="app-btn app-btn-primary" id="btn-publish-all" {% if not node_count %}disabled{% endif %}>
-          <i class="ti ti-upload" aria-hidden="true"></i><span>Publish to all screens</span>
-        </button>
-      </form>
-      {% for command, label in commands.items %}
-      <form method="post" action="{% url 'controller:screens_command' %}" class="inline m-0"
-        {% if command == 'reboot' %}onsubmit="return confirm('Reboot every managed screen? This screen is not rebooted.');"{% endif %}>
-        {% csrf_token %}
-        <input type="hidden" name="target" value="all">
-        <input type="hidden" name="command" value="{{ command }}">
-        <button type="submit" class="app-btn app-btn-outline-dark" id="btn-all-{{ command }}" {% if not node_count %}disabled{% endif %}>
-          <span>{{ label }}</span>
-        </button>
-      </form>
-      {% endfor %}
-      <form method="post" action="{% url 'controller:screens_refresh' %}" class="inline m-0">
-        {% csrf_token %}
-        <button type="submit" class="app-btn app-btn-outline-dark" id="btn-refresh">
-          <i class="ti ti-reload" aria-hidden="true"></i><span>Check now</span>
-        </button>
-      </form>
-    </div>
-  </section>
-
-  <div class="mt-4">
-    {% include "controller/_screens_table.html" %}
-  </div>
+  {% include "controller/_activity.html" %}
   {% endif %}
 </div>
 {% endblock %}

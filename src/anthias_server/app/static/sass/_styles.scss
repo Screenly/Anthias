@@ -2223,9 +2223,6 @@ label { text-align: left; }
   padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2);
   font-size: 0.8125rem;
 }
-.screens__fp {
-  font-family: var(--font-mono, ui-monospace, "SF Mono", monospace);
-}
 .screens__detail {
   overflow-wrap: anywhere;
 }
@@ -2286,6 +2283,7 @@ label { text-align: left; }
   font-weight: 600;
 }
 .screens__status--unauthorized,
+.screens__status--unreachable,
 .screens__publish--queued,
 .screens__publish--running,
 .screens__outcome--partial {
@@ -3733,4 +3731,259 @@ body.auth-body {
   }
 
   p { margin: calc(var(--spacing) * 3) 0; }
+}
+
+// --- Multi-screen UX ------------------------------------------------------
+
+// Links inside an alert's running text: underlined, so they don't rely
+// on color alone (WCAG 1.4.1); the label never breaks at the arrow.
+.device-alert__lede a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  white-space: nowrap;
+}
+
+// Count of join requests waiting, on the Screens tab.
+.app-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-on-accent, #1a0026);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+// Settings → Multi-screen management: the two ways in, side by side.
+.management__choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: calc(var(--spacing) * 4);
+}
+.management__choice {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 3);
+  padding: calc(var(--spacing) * 4);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+}
+.management__choice-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.management__steps,
+.screens__steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  list-style: decimal;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--color-fg-muted);
+  li + li { margin-top: 0.25rem; }
+}
+.management__note {
+  margin: 0;
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+  font-size: 0.8125rem;
+  color: var(--color-fg-muted);
+  .ti { margin-top: 0.15rem; }
+}
+.management__hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-fg-muted);
+}
+.management__advanced {
+  font-size: 0.875rem;
+  > summary { cursor: pointer; font-weight: 600; }
+  .management__hint { margin-top: calc(var(--spacing) * 2); }
+}
+
+// Screens page.
+.screens__requests-lede {
+  margin: 0;
+  padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 2);
+  font-size: 0.875rem;
+  color: var(--color-fg-muted);
+}
+.screens__empty .screens__steps {
+  max-width: 34rem;
+  margin: calc(var(--spacing) * 2) auto 0;
+  text-align: left;
+}
+.screens__join {
+  > .screens__join-summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    // Same look as a .settings-section h2 (see the note in screens.html).
+    .screens__join-title { margin: 0; font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em; }
+    &::-webkit-details-marker { display: none; }
+    &::before {
+      content: "\25B8";
+      font-size: 0.9em;
+      color: var(--color-fg-muted);
+      transition: transform var(--t-fast);
+    }
+  }
+  &[open] > .screens__join-summary::before { transform: rotate(90deg); }
+  &[open] > .screens__join-summary { margin-bottom: calc(var(--spacing) * 2); }
+}
+.screens__control {
+  margin-top: calc(var(--spacing) * 5);
+  padding-top: calc(var(--spacing) * 4);
+  border-top: 1px solid var(--color-divider);
+}
+.screens__control-title {
+  margin: 0 0 calc(var(--spacing) * 3);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.screens__danger { margin-left: auto; }
+
+// Per-screen actions: Publish stays visible; the rest is a menu with
+// labelled, full-size items (WCAG 2.5.8 target size).
+.screens__menu {
+  position: relative;
+  > summary { list-style: none; }
+  > summary::-webkit-details-marker { display: none; }
+}
+.screens__menu-toggle {
+  min-height: 2.5rem;
+  min-width: 2.5rem;
+  cursor: pointer;
+}
+.screens__menu-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.screens__menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.25rem);
+  z-index: var(--z-raised, 10);
+  min-width: 12rem;
+  padding: 0.375rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  text-align: left;
+}
+.screens__menu-item {
+  display: flex;
+  width: 100%;
+  min-height: 2.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  &:hover, &:focus-visible { background: var(--color-scrim-4); }
+}
+.screens__menu-item--danger { color: var(--color-danger); }
+.screens__menu-sep {
+  margin: 0.25rem 0;
+  border: 0;
+  border-top: 1px solid var(--color-divider);
+}
+@media (max-width: 640px) {
+  .screens__decide {
+    width: 100%;
+    > form { flex: 1; }
+    .app-btn { width: 100%; justify-content: center; min-height: 2.75rem; }
+  }
+  .screens__danger { margin-left: 0; }
+}
+
+// Activity: one compact entry per event at every width.
+.screens-activity {
+  list-style: none;
+  margin: 0;
+  padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 2);
+}
+.screens-activity__item {
+  display: flex;
+  gap: calc(var(--spacing) * 3);
+  align-items: flex-start;
+  padding: calc(var(--spacing) * 3) 0;
+  border-top: 1px solid var(--color-divider);
+  &:first-child { border-top: 0; }
+  > .screens__outcome { flex: none; min-width: 4.5rem; text-align: center; }
+}
+.screens-activity__body { min-width: 0; }
+.screens-activity__what { margin: 0; font-size: 0.9375rem; }
+.screens-activity__detail {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+}
+.screens-activity__empty { padding: calc(var(--spacing) * 4); margin: 0; }
+@media (max-width: 640px) {
+  .screens-activity__item {
+    flex-direction: column;
+    gap: calc(var(--spacing) * 1);
+    > .screens__outcome { min-width: 0; }
+  }
+}
+.screens__outcome--pending {
+  background: var(--color-scrim-5);
+  color: var(--color-fg-muted);
+}
+
+// Settings → Backup & restore: the confirmation step before a restore.
+.backup__restore {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 3);
+  margin-top: calc(var(--spacing) * 4);
+  padding: calc(var(--spacing) * 4);
+  border: 1px solid var(--color-warning-edge);
+  border-radius: var(--radius-lg);
+  background: var(--color-warning-wash);
+}
+.backup__restore-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-warning-on-wash);
+  overflow-wrap: anywhere;
+}
+.settings-section .settings-section__badge--muted {
+  background: var(--color-scrim-5);
+  color: var(--color-fg-muted);
+}
+
+// Sign-in page of a managed screen.
+.auth-link {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-weight: 600;
+  text-decoration: underline;
+}
+.auth-subhead--small {
+  margin-top: calc(var(--spacing) * 3);
+  font-size: 0.8125rem;
 }

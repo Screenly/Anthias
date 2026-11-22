@@ -1,17 +1,22 @@
 {% load humanize %}
 {% comment %}
-Multi-screen management section of the settings page. Rendered in full
-on GET and swapped in place (hx-swap="outerHTML") after a join or a
-leave. Joining works like a Proxmox cluster join: paste the join
-information from the controller's Screens page. It carries the
-controller's certificate fingerprint, so the first connection is
-already pinned.
+Multi-screen section of the settings page: the one place for this
+device's role. Rendered in full on GET and swapped in place
+(hx-swap="outerHTML") after every action here.
+
+* standalone: join a controller (paste its join information), or make
+  this device a controller;
+* controller: link to Screens, turn controller mode off;
+* waiting for approval: the check code, cancel;
+* managed: the controller's name, leave. (Behind Caddy the web
+  interface of a managed screen is shut, see managed.html, so this
+  state shows only where that does not apply.)
 {% endcomment %}
 <section class="settings-section mt-4" id="management">
   <header>
     <div>
       <h2>Multi-screen management</h2>
-      <p class="settings-section__lede">Let another Anthias screen (the controller) publish content to this one. The controller connects to this screen on port {{ management_port }} with this screen's own certificate.</p>
+      <p class="settings-section__lede">Run several screens from one: a <strong>controller</strong> publishes its schedule to the screens that join it and controls them from its <strong>Screens</strong> page.</p>
     </div>
   </header>
 
@@ -19,7 +24,38 @@ already pinned.
   <p class="api-tokens__error" role="alert">{{ management_error }}</p>
   {% endif %}
 
-  {% if management_pending and not management_controller %}
+  {% if management_controller_mode %}
+  <div class="settings-section__row">
+    <div>
+      <strong>This screen is a controller</strong>
+      <p class="settings-section__lede">
+        {% if management_screen_count %}It manages {{ management_screen_count }} screen{{ management_screen_count|pluralize }}.{% else %}No screens have joined yet.{% endif %}
+        {% if management_request_count %}<strong>{{ management_request_count }} waiting for approval.</strong>{% endif %}
+      </p>
+    </div>
+    <div class="settings-section__actions">
+      <a class="app-btn app-btn-primary" href="{% url 'controller:screens' %}" id="btn-open-screens">
+        <i class="ti ti-devices" aria-hidden="true"></i><span>Open Screens</span>
+      </a>
+      <form
+        method="post"
+        action="{% url 'anthias_app:settings_management_controller' %}"
+        hx-post="{% url 'anthias_app:settings_management_controller' %}"
+        hx-target="#management"
+        hx-swap="outerHTML"
+        hx-confirm="Turn off controller mode? You can't publish to or control your screens until it is back on. They keep playing what they have."
+        class="inline m-0"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="enable" value="0">
+        <button type="submit" id="btn-controller-off" class="app-btn app-btn-outline-dark">
+          <span>Turn off controller mode</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {% elif management_pending and not management_controller %}
   <div class="settings-section__row"
     hx-get="{% url 'anthias_app:settings_management_section' %}"
     hx-trigger="every 5s"
@@ -28,10 +64,13 @@ already pinned.
     <div>
       <strong>Waiting for approval on {{ management_pending.name }}</strong>
       <p class="settings-section__lede">
-        Approve this screen on the controller's <strong>Screens</strong> page. Check that it shows the same code:
+        On the controller, open <strong>Screens</strong> and approve this screen. Check that it shows the same code:
       </p>
       <p class="management__check-code" id="management-check-code">{{ management_check_code }}</p>
-      <p class="settings-section__lede">Asked {{ management_pending.paired_at|naturaltime }} · <code>{{ management_pending.url }}</code> · the request expires after 24 hours.</p>
+      <p class="settings-section__lede">
+        Asked {{ management_pending.paired_at|naturaltime }}. The request expires after 24 hours.
+        Once approved, this screen's own web interface turns off; you manage it from the controller.
+      </p>
     </div>
     <div class="settings-section__actions">
       <form
@@ -50,13 +89,13 @@ already pinned.
       </form>
     </div>
   </div>
+
   {% elif management_controller %}
   <div class="settings-section__row">
     <div>
       <strong>Managed by {{ management_controller.name }}</strong>
       <p class="settings-section__lede">
         Joined {{ management_controller.paired_at|naturaltime }}
-        · <code>{{ management_controller.url }}</code>
         {% if management_controller.token.last_used_at %}· last contact {{ management_controller.token.last_used_at|naturaltime }}{% endif %}
       </p>
     </div>
@@ -77,35 +116,75 @@ already pinned.
       </form>
     </div>
   </div>
+
   {% elif not management_auth_enabled %}
   <p class="api-tokens__notice" role="status">
     <i class="ti ti-lock-open" aria-hidden="true"></i>
-    <span>Authentication is disabled, so the API is open to anyone on the network. Turn on authentication above before joining a controller.</span>
+    <span>Multi-screen management needs authentication. Turn it on under <a href="#authentication">Authentication</a> first, then come back here.</span>
   </p>
+
   {% else %}
-  <form
-    method="post"
-    action="{% url 'anthias_app:settings_management_join' %}"
-    hx-post="{% url 'anthias_app:settings_management_join' %}"
-    hx-target="#management"
-    hx-swap="outerHTML"
-    hx-disabled-elt="find button"
-    class="management__join"
-  >
-    {% csrf_token %}
-    <div class="app-floating">
-      <textarea class="app-input management__snippet" id="join-info" name="join_info" placeholder=" " rows="3" required autocomplete="off" spellcheck="false">{{ management_form.join_info|default:'' }}</textarea>
-      <label for="join-info">Join information from the controller's Screens page</label>
+  <div class="management__choices">
+    <div class="management__choice">
+      <h3 class="management__choice-title"><i class="ti ti-link" aria-hidden="true"></i> Join a controller</h3>
+      <ol class="management__steps">
+        <li>On the controller, open <strong>Screens</strong> and click <strong>Copy</strong> under <strong>Join information</strong>.</li>
+        <li>Paste it below and click <strong>Join controller</strong>.</li>
+        <li>Approve this screen on the controller, after checking that both show the same code.</li>
+      </ol>
+      <p class="management__note">
+        <i class="ti ti-info-circle" aria-hidden="true"></i>
+        Once approved, this screen's own web interface turns off: you manage it from the controller.
+      </p>
+      <form
+        method="post"
+        action="{% url 'anthias_app:settings_management_join' %}"
+        hx-post="{% url 'anthias_app:settings_management_join' %}"
+        hx-target="#management"
+        hx-swap="outerHTML"
+        hx-disabled-elt="find button"
+        class="management__join"
+      >
+        {% csrf_token %}
+        <div class="app-floating">
+          <textarea class="app-input management__snippet" id="join-info" name="join_info" placeholder=" " rows="3" required autocomplete="off" spellcheck="false">{{ management_form.join_info|default:'' }}</textarea>
+          <label for="join-info">Join information (starts with anthias-join:)</label>
+        </div>
+        <details class="management__advanced" {% if management_form.screen_host %}open{% endif %}>
+          <summary>Advanced</summary>
+          <div class="app-floating mt-2">
+            <input type="text" class="app-input" id="screen-host" name="screen_host" placeholder=" " maxlength="253" autocomplete="off" value="{{ management_form.screen_host|default:'' }}">
+            <label for="screen-host">This screen's address, as the controller should reach it</label>
+          </div>
+          <p class="management__hint">Only needed if the controller can't reach this screen at the address it connects from, for example behind NAT. An IP address or DNS name.</p>
+        </details>
+        <div>
+          <button type="submit" id="btn-join-controller" class="app-btn app-btn-primary">
+            <i class="ti ti-link" aria-hidden="true"></i><span>Join controller</span>
+          </button>
+        </div>
+      </form>
     </div>
-    <div class="app-floating">
-      <input type="text" class="app-input" id="screen-host" name="screen_host" placeholder=" " maxlength="253" autocomplete="off" value="{{ management_form.screen_host|default:'' }}">
-      <label for="screen-host">This screen's address for the controller (optional IP or DNS name)</label>
+    <div class="management__choice">
+      <h3 class="management__choice-title"><i class="ti ti-devices" aria-hidden="true"></i> Make this screen a controller</h3>
+      <p class="management__hint">
+        It keeps playing its own schedule, and gets a <strong>Screens</strong> page from which it publishes that schedule to other screens and controls them. Best on a Raspberry Pi 4 or later, or an x86 PC.
+      </p>
+      <form
+        method="post"
+        action="{% url 'anthias_app:settings_management_controller' %}"
+        hx-post="{% url 'anthias_app:settings_management_controller' %}"
+        hx-target="#management"
+        hx-swap="outerHTML"
+        class="inline m-0"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="enable" value="1">
+        <button type="submit" id="btn-controller-on" class="app-btn app-btn-outline-dark">
+          <i class="ti ti-devices" aria-hidden="true"></i><span>Make this a controller</span>
+        </button>
+      </form>
     </div>
-    <div>
-      <button type="submit" id="btn-join-controller" class="app-btn app-btn-primary">
-        <i class="ti ti-link" aria-hidden="true"></i><span>Join controller</span>
-      </button>
-    </div>
-  </form>
+  </div>
   {% endif %}
 </section>

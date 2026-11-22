@@ -57,6 +57,7 @@ def _nodes_context() -> dict[str, Any]:
         ),
         'attention_count': sum(bool(n.health_problems) for n in nodes),
         'audit_entries': list(AuditEntry.objects.all()[:AUDIT_ROWS]),
+        'management_port': management.M2M_PORT,
         'commands': service.COMMANDS,
         'command_buttons': [
             (command, label, service.COMMAND_ICONS[command])
@@ -107,6 +108,18 @@ def screens_table(request: HttpRequest) -> HttpResponse:
         return HttpResponse(status=204)
     return template(
         request, 'controller/_screens_table.html', _nodes_context()
+    )
+
+
+@authorized
+@require_http_methods(['GET'])
+def screens_activity(request: HttpRequest) -> HttpResponse:
+    if not service.controller_enabled():
+        return HttpResponse(status=204)
+    return template(
+        request,
+        'controller/_activity.html',
+        {'audit_entries': list(AuditEntry.objects.all()[:AUDIT_ROWS])},
     )
 
 
