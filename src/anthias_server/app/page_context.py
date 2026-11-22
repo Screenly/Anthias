@@ -330,6 +330,7 @@ def navbar() -> dict[str, Any]:
         'power_warning': _power_warning(),
         'storage_warning': _storage_warning(),
         'managed_by': _managed_by(),
+        'auth_off': not settings['auth_backend'],
     }
 
 

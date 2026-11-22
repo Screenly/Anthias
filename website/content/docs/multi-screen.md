@@ -149,14 +149,20 @@ appears on the controller.
    click **Approve**. If you don't recognize the request, click
    **Reject**.
 
-Once approved, the screen shows a **Managed by …** banner on every
-page, and it appears on the controller's **Screens** page as
-**Online**. A request that nobody approves expires after 24 hours; the
+Once approved, the screen appears on the controller's **Screens** page
+as **Online**, and its own web interface turns off (see below). A request that nobody approves expires after 24 hours; the
 screen can withdraw it with **Cancel request**.
 
-**Content on a managed screen is replaced when the controller
-publishes.** Assets you add or change directly on the screen are removed
-on the next publish. The banner on every page is there as a reminder.
+### A managed screen's web interface is off
+
+From then on the controller is the only place to change the screen.
+Opening the screen's own address shows a **Managed by …** page instead
+of the usual interface, and its local API answers with an error. Port
+8443, which the controller uses, keeps working, and so does playback.
+
+If the controller is gone, for example it was replaced and its screens
+can't reach it, sign in on that page and use **Leave management** to
+take the screen back. Its web interface comes back at once.
 
 ## Publish and control
 
@@ -255,6 +261,9 @@ Management traffic never uses passwords and never leaves your network:
   screens get each new list at once; the controller re-signs it at
   least every five days, and screens refuse a controller certificate
   that is on it.
+* **Authentication comes first.** Joining and controller mode need it,
+  and every Anthias device shows a warning on each page while it is
+  off, because anyone on the network could then change the screen.
 * **A separate port for management.** Port 8443 always presents the
   device's own certificate and only serves the management API.
   Uploading a certificate for the web interface doesn't affect it.
@@ -274,9 +283,9 @@ copied backup file can never be used to vouch for a device.
 
 ## Leaving and removing
 
-* On a screen, **Settings → Leave management** revokes the controller's
-  token immediately and closes port 8443. Revoking the `Controller: …`
-  token under **Settings → API tokens** does the same.
+* On a screen, sign in on its **Managed by …** page and use **Leave
+  management**. That revokes the controller's token immediately, closes
+  port 8443 and brings the screen's web interface back.
 * On the controller, **Remove** revokes the token on the screen,
   revokes the screen's client certificate, and forgets it.
 

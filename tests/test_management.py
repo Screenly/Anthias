@@ -520,13 +520,12 @@ def test_caddy_config_includes_m2m_site_only_while_active(
     assert any(caddy.TAG_NODE in entry['tags'] for entry in tls)
 
 
-def test_m2m_listener_header_is_stripped_on_ui_sites() -> None:
+def test_ui_sites_overwrite_the_listener_header() -> None:
     from anthias_server.lib import caddy
 
-    assert caddy.proxy_handler()['headers']['request']['delete'] == [
-        caddy.LISTENER_HEADER,
-        caddy.CLIENT_CERT_HEADER,
-    ]
+    request_headers = caddy.proxy_handler()['headers']['request']
+    assert request_headers['set'] == {caddy.LISTENER_HEADER: ['ui']}
+    assert request_headers['delete'] == [caddy.CLIENT_CERT_HEADER]
 
 
 def test_request_via_m2m() -> None:
@@ -1082,3 +1081,143 @@ def test_a_controller_cannot_join_another_controller(
     with pytest.raises(management.ManagementError):
         management.join(snippet)
     assert controller_reply['calls'] == []
+
+
+# ---------------------------------------------------------------------------
+# a managed screen's web interface is shut
+
+
+UI = {'X-Anthias-Listener': 'ui'}
+
+
+@pytest.fixture
+def signed_in(operator: User) -> Client:
+    client = Client()
+    client.force_login(operator)
+    return client
+
+
+@pytest.mark.django_db
+def test_a_managed_screen_shows_only_the_managed_page(
+    signed_in: Client, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    _join_and_approve()
+    for path in ('/', '/settings/', '/system-info/', '/integrations/'):
+        response = signed_in.get(path, headers=UI)
+        assert response.status_code == 302, path
+        assert response['Location'] == reverse('anthias_app:managed')
+    response = signed_in.post(
+        reverse('anthias_app:settings_save'), {}, headers=UI
+    )
+    assert response['Location'] == reverse('anthias_app:managed')
+
+    html = signed_in.get(
+        reverse('anthias_app:managed'), headers=UI
+    ).content.decode()
+    assert 'Managed by Lobby' in html
+    assert 'Controller <code>https://controller.lan:8443</code>' in html
+    assert 'btn-managed-leave' in html
+    # Signing in stays possible.
+    assert Client().get('/login/', headers=UI).status_code == 200
+
+
+@pytest.mark.django_db
+def test_a_managed_screen_refuses_its_local_api(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    _join_and_approve()
+    plaintext = controller_reply['calls'][0]['json']['token']
+    auth = {'Authorization': f'Bearer {plaintext}'}
+    response = Client().get('/api/v2/assets', headers={**auth, **UI})
+    assert response.status_code == 403
+    assert 'managed' in response.json()['detail']
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    'listener',
+    [
+        None,  # the viewer / webview, inside the Docker network
+        'm2m',  # the controller, on 8443
+    ],
+)
+def test_only_the_web_interface_is_shut(
+    signed_in: Client,
+    auth_on: None,
+    controller_reply: dict[str, Any],
+    listener: str | None,
+) -> None:
+    from django.http import HttpResponse
+    from django.test import RequestFactory
+
+    _join_and_approve()
+    headers = {'X-Anthias-Listener': listener} if listener else {}
+    middleware = management.ManagedUILockdownMiddleware(
+        lambda _request: HttpResponse('through')
+    )
+    for path in ('/', '/api/v2/assets', '/settings/'):
+        request = RequestFactory().get(path, headers=headers)
+        assert middleware(request).content == b'through', path
+    if listener is None:
+        assert signed_in.get('/').status_code == 200
+
+
+@pytest.mark.django_db
+def test_waiting_for_approval_keeps_the_web_interface(
+    signed_in: Client, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    management.join(_snippet())
+    assert not management.ui_locked()
+    assert signed_in.get('/settings/', headers=UI).status_code == 200
+    # Nothing to show on the managed page yet.
+    response = signed_in.get(reverse('anthias_app:managed'), headers=UI)
+    assert response['Location'] == reverse('anthias_app:home')
+
+
+@pytest.mark.django_db
+def test_leaving_from_the_managed_page_opens_the_web_interface(
+    signed_in: Client, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    _join_and_approve()
+    response = signed_in.post(reverse('anthias_app:managed_leave'), headers=UI)
+    assert response['Location'] == reverse('anthias_app:home')
+    assert not management.is_managed()
+    assert not management.ui_locked()
+    assert signed_in.get('/', headers=UI).status_code == 200
+
+
+@pytest.mark.django_db
+def test_leaving_from_the_managed_page_needs_a_sign_in(
+    operator: User, auth_on: None, controller_reply: dict[str, Any]
+) -> None:
+    _join_and_approve()
+    response = Client().post(reverse('anthias_app:managed_leave'), headers=UI)
+    assert response.status_code == 302
+    assert reverse('anthias_app:login') in response['Location']
+    assert management.is_managed()
+
+
+# ---------------------------------------------------------------------------
+# the warning while authentication is off
+
+
+@pytest.mark.django_db
+def test_every_page_warns_while_authentication_is_off(
+    _isolated_settings_conf: None,
+) -> None:
+    from anthias_server.settings import settings
+
+    settings['auth_backend'] = ''
+    settings.save()
+    for path in ('/', '/settings/', '/system-info/'):
+        html = Client().get(path).content.decode()
+        assert 'id="auth-warning"' in html, path
+        assert 'Anyone on your network can change this screen' in html
+
+
+@pytest.mark.django_db
+def test_no_warning_once_authentication_is_on(
+    signed_in: Client, auth_on: None
+) -> None:
+    html = signed_in.get('/').content.decode()
+    assert 'id="auth-warning"' not in html

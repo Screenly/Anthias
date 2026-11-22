@@ -56,9 +56,14 @@ TAG_WEB = 'anthias-web'
 HTTP_PORT = 80
 HTTPS_PORT = 443
 
-# Strip from every request on the UI sites so a client cannot pretend
-# to have arrived through the machine-to-machine listener.
+# Which Caddy site a request came in through. Always set by Caddy
+# (overwriting anything a client sent), so a client can neither pretend
+# to have arrived through the machine-to-machine listener nor hide that
+# it came through the web interface. Requests that reach anthias-server
+# directly inside the Docker network (the viewer, the webview) carry
+# none.
 LISTENER_HEADER = 'X-Anthias-Listener'
+UI_LISTENER_VALUE = 'ui'
 # The TLS client certificate (base64 DER) a peer presented on the m2m
 # site, so the app can check its issuer, role and serial (against the
 # CRL). Set only by Caddy there; stripped on every other site so a
@@ -117,10 +122,8 @@ def proxy_handler() -> dict[str, Any]:
         'upstreams': [{'dial': UPSTREAM}],
         'headers': {
             'request': {
-                'delete': [
-                    LISTENER_HEADER,
-                    CLIENT_CERT_HEADER,
-                ]
+                'set': {LISTENER_HEADER: [UI_LISTENER_VALUE]},
+                'delete': [CLIENT_CERT_HEADER],
             }
         },
     }
