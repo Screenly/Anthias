@@ -50,7 +50,7 @@ from anthias_server.app.models import (
 )
 from anthias_server.celery_tasks import reboot_anthias, shutdown_anthias
 from anthias_server.django_project.settings import is_valid_time_zone
-from anthias_server.lib import backup_helper, diagnostics
+from anthias_server.lib import api_tokens, backup_helper, diagnostics
 from anthias_server.lib.auth import (
     AuthSettingsError,
     apply_auth_settings,
@@ -1906,9 +1906,22 @@ def _apply_display_power_schedule_settings(request: HttpRequest) -> None:
     )
 
 
-@authorized
-@require_http_methods(['GET'])
-def settings_view(request: HttpRequest) -> HttpResponse:
+def _api_tokens_context(
+    new_token: str | None = None,
+    token_error: str | None = None,
+) -> dict[str, Any]:
+    return {
+        'api_tokens': list(api_tokens.active_tokens()),
+        'api_tokens_enabled': api_tokens.tokens_enabled(),
+        'new_api_token': new_token,
+        'api_token_error': token_error,
+        'api_token_name_max': api_tokens.MAX_NAME_LEN,
+    }
+
+
+def _settings_page(
+    request: HttpRequest, extra: dict[str, Any] | None = None
+) -> HttpResponse:
     from anthias_server.lib.integrations.registry import list_provider_meta
 
     context = page_context.device_settings()
@@ -1916,7 +1929,67 @@ def settings_view(request: HttpRequest) -> HttpResponse:
     # Data-driven so a newly registered provider appears in Settings with
     # no template edit.
     context['import_providers'] = list_provider_meta()
+    context.update(_api_tokens_context())
+    if extra:
+        context.update(extra)
     return template(request, 'settings.html', context)
+
+
+@authorized
+@require_http_methods(['GET'])
+def settings_view(request: HttpRequest) -> HttpResponse:
+    return _settings_page(request)
+
+
+def _api_tokens_response(
+    request: HttpRequest,
+    *,
+    new_token: str | None = None,
+    token_error: str | None = None,
+) -> HttpResponse:
+    """Render the API-tokens section after a create or revoke.
+
+    htmx swaps just the section; a plain form post gets the whole
+    settings page. Either way the response is rendered rather than
+    redirected, because a freshly created token's plaintext exists
+    only in this response and must never be parked in the session.
+    """
+    extra = _api_tokens_context(new_token, token_error)
+    if request.headers.get('HX-Request'):
+        response = template(request, '_api_tokens.html', extra)
+    else:
+        response = _settings_page(request, extra)
+    if new_token:
+        response['Cache-Control'] = 'no-store'
+    return response
+
+
+@authorized
+@require_http_methods(['POST'])
+def settings_api_tokens_create(request: HttpRequest) -> HttpResponse:
+    try:
+        token, plaintext = api_tokens.create_token(
+            request.user,
+            request.POST.get('name', ''),
+        )
+    except api_tokens.ApiTokenError as exc:
+        logger.warning('API token not created: %s', exc)
+        return _api_tokens_response(request, token_error=str(exc))
+    logger.info('API token %r (%s…) created', token.name, token.prefix)
+    return _api_tokens_response(request, new_token=plaintext)
+
+
+@authorized
+@require_http_methods(['POST'])
+def settings_api_tokens_revoke(
+    request: HttpRequest, token_id: int
+) -> HttpResponse:
+    if not api_tokens.revoke_token(token_id):
+        return _api_tokens_response(
+            request, token_error='That token was already revoked.'
+        )
+    logger.info('API token %d revoked', token_id)
+    return _api_tokens_response(request)
 
 
 @authorized

@@ -2,7 +2,7 @@
 
 The legacy ``Auth`` / ``NoAuth`` / ``BasicAuth`` abstractions have been
 retired in favour of Django's built-in primitives. Anthias now has
-three credential paths, each with a distinct caller and trust model:
+four credential paths, each with a distinct caller and trust model:
 
 1. **Browser session** (operators using the dashboard).
    Driven by ``django.contrib.auth``: the login form posts to
@@ -20,12 +20,17 @@ three credential paths, each with a distinct caller and trust model:
    signal we care about is "this caller is still on Basic", not the
    request rate. Pre-2826 versions of Anthias-CLI and any third-party
    scripts that were written against the old auth keep working
-   unchanged. The bearer-token path that will eventually replace
-   this is tracked as a follow-up — it needs its own UI for create /
-   list / revoke and a multi-token model with hashed storage,
-   neither of which fits in this PR.
+   unchanged. New integrations should use a bearer token (below).
 
-3. **Viewer ↔ server shared secret** (intra-device, same trust
+3. **API bearer tokens** (headless integrations, e.g. a controller
+   managing several screens).
+   ``Authorization: Bearer <token>`` against hashed, revocable
+   :class:`anthias_server.app.models.ApiToken` rows the operator
+   creates and revokes on the settings page. Ignored while auth is
+   disabled — see :mod:`anthias_server.lib.api_tokens` for the
+   lifecycle and that contract.
+
+4. **Viewer ↔ server shared secret** (intra-device, same trust
    boundary).
    The viewer process can't carry an operator session, but it does
    need to call a small set of internal endpoints (currently just
@@ -51,6 +56,9 @@ This module's surface is:
   the last callers still using the legacy header without being
   flooded by chatty polling clients. Also gated by ``auth_backend``
   (no-ops when the operator has turned auth off).
+* ``BearerTokenAuthentication`` — ``Authorization: Bearer`` against
+  :class:`anthias_server.app.models.ApiToken`, with the same
+  auth-backend gate.
 * ``GatedSessionAuthentication`` — DRF's ``SessionAuthentication``
   with the same auth-backend gate so an incidental session cookie
   doesn't trigger CSRF rejection on write endpoints when auth is
@@ -83,6 +91,8 @@ if TYPE_CHECKING:
     from django.contrib.auth.models import User
     from django.http import HttpRequest, HttpResponse
     from rest_framework.request import Request as DRFRequest
+
+    from anthias_server.app.models import ApiToken
 
     # ``apply_auth_settings`` and ``_operator_user`` are called from
     # both the Django HTML write path (``HttpRequest``) and the DRF
@@ -192,9 +202,12 @@ def _build_drf_auth_classes() -> dict[str, type]:
     Neither is appropriate when auth is turned off.
     """
     from rest_framework.authentication import (
+        BaseAuthentication,
         BasicAuthentication,
         SessionAuthentication,
+        get_authorization_header,
     )
+    from rest_framework.exceptions import AuthenticationFailed
 
     class _AuthBackendGated:
         """Mixin: ``authenticate()`` returns ``None`` (= "this class
@@ -276,14 +289,60 @@ def _build_drf_auth_classes() -> dict[str, type]:
         ``authenticate`` before the CSRF check runs.
         """
 
+    class _BearerTokenAuthentication(BaseAuthentication):
+        keyword = b'bearer'
+
+        def authenticate(
+            self, request: DRFRequest
+        ) -> tuple[User, ApiToken] | None:
+            from anthias_server.lib.api_tokens import authenticate_token
+
+            parts = get_authorization_header(request).split()
+            if not parts or parts[0].lower() != self.keyword:
+                return None
+            if len(parts) != 2:
+                raise AuthenticationFailed(
+                    'Invalid Authorization header. Expected "Bearer <token>".'
+                )
+            try:
+                plaintext = parts[1].decode('ascii')
+            except UnicodeDecodeError as exc:
+                raise AuthenticationFailed('Invalid token.') from exc
+            token = authenticate_token(plaintext)
+            if token is None:
+                raise AuthenticationFailed('Invalid or revoked token.')
+            return (token.user, token)
+
+        def authenticate_header(self, request: DRFRequest) -> str:
+            return 'Bearer realm="api"'
+
+    class BearerTokenAuthentication(
+        _AuthBackendGated, _BearerTokenAuthentication
+    ):
+        """``Authorization: Bearer <token>`` against
+        :class:`anthias_server.app.models.ApiToken`.
+
+        Declines requests without a Bearer header so the other
+        authenticators get their turn, and answers 401 for a header
+        whose token is unknown, revoked, or belongs to an inactive
+        user. Gated like the other classes: while auth is disabled
+        the header is ignored and the request runs anonymously
+        against the open API (see :mod:`anthias_server.lib.api_tokens`).
+        """
+
     return {
+        'BearerTokenAuthentication': BearerTokenAuthentication,
         'DeprecatedBasicAuthentication': DeprecatedBasicAuthentication,
         'GatedSessionAuthentication': GatedSessionAuthentication,
     }
 
 
 _DRF_AUTH_CLASS_NAMES = frozenset(
-    {'DeprecatedBasicAuthentication', 'GatedSessionAuthentication'}
+    {
+        'BearerTokenAuthentication',
+        'DeprecatedBasicAuthentication',
+        'GatedSessionAuthentication',
+    }
 )
 
 
