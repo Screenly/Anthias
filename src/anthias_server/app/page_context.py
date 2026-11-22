@@ -324,6 +324,7 @@ def navbar() -> dict[str, Any]:
     """Shared by every page; merged into context by helpers.template()."""
     return {
         'is_balena': is_balena_app(),
+        'controller_mode': bool(settings['controller_mode']),
         'up_to_date': is_up_to_date(),
         'player_name': settings['player_name'],
         'power_warning': _power_warning(),
@@ -613,6 +614,7 @@ def device_settings() -> dict[str, Any]:
         'debug_logging': settings['debug_logging'],
         'prefer_dark_mode': settings['prefer_dark_mode'],
         'verify_ssl': settings['verify_ssl'],
+        'controller_mode': settings['controller_mode'],
         # Clamp on the read side so a stale conf value (e.g. an
         # old 45 from a hand-edit) doesn't leave the dropdown with no
         # ``selected`` option — the template's {% if screen_rotation

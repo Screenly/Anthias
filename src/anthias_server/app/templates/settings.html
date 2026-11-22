@@ -232,6 +232,21 @@
       </div>
     </section>
 
+    {# ===== Controller mode ===== #}
+    <section class="settings-section" id="controller-mode">
+      <header>
+        <div>
+          <h2>Controller mode</h2>
+          <p class="settings-section__lede">
+            Manage other Anthias screens from this one: publish this screen's
+            schedule to all of them and control them in bulk from the
+            <strong>Screens</strong> page. Requires authentication.
+          </p>
+        </div>
+      </header>
+      {% include "_settings_toggle.html" with name="controller_mode" label="Controller mode" hint="Adds the Screens page and accepts screens that join with this device's join information." checked=controller_mode %}
+    </section>
+
     <div class="flex justify-end">
       <button type="submit" class="app-btn app-btn-primary">
         <i class="ti ti-check"></i><span>Save settings</span>

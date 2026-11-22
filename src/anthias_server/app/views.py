@@ -2231,6 +2231,21 @@ def settings_save(request: HttpRequest) -> HttpResponse:
         settings['debug_logging'] = _checkbox(request, 'debug_logging')
         settings['verify_ssl'] = _checkbox(request, 'verify_ssl')
 
+        # Controller mode holds access to every managed screen, so it
+        # is refused while the UI is open to anyone on the network.
+        controller_mode = _checkbox(request, 'controller_mode')
+        controller_mode_changed = controller_mode != bool(
+            settings['controller_mode']
+        )
+        if controller_mode and not auth_backend:
+            controller_mode = False
+            messages.warning(
+                request,
+                'Controller mode needs authentication. Turn on '
+                'authentication first.',
+            )
+        settings['controller_mode'] = controller_mode
+
         # Restrict to the four cardinal angles via the shared
         # clamp_screen_rotation() helper. The Qt linuxfb plugin only
         # honors 0/90/180/270 (anything else is silently treated as
@@ -2271,10 +2286,12 @@ def settings_save(request: HttpRequest) -> HttpResponse:
                 from anthias_server.app.consumers import disconnect_all
 
                 disconnect_all()
-            if auth_change.backend_changed:
+            if auth_change.backend_changed or controller_mode_changed:
                 # Management needs auth: turning auth off withdraws the
                 # m2m site and the pairing code, turning it back on
                 # restores them if "Allow management" is still set.
+                # Controller mode puts the same site up so screens can
+                # reach this device's join endpoint.
                 management.sync_state()
         ViewerPublisher.get_instance().send_to_viewer('reload')
 

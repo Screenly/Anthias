@@ -51,6 +51,7 @@ urlpatterns = [
         views_files.static_with_mime,
         name='static_with_mime',
     ),
+    path('screens/', include('anthias_server.controller.urls')),
     path('', include('anthias_server.app.urls')),
 ]
 

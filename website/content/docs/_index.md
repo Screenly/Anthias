@@ -166,6 +166,24 @@ The screen then shows a **Managed by …** banner on every page. Content you cha
 
 The screen keeps only a hash of the controller's token, like any API token. To stop being managed, click **Leave management** in Settings: the token is revoked at once, port 8443 closes, and the controller shows the screen as having left. Revoking the `Controller: …` token under **API tokens** has the same effect. The screen's identity certificate is not part of backups, so restoring a backup on another device doesn't clone a screen's identity.
 
+#### The controller side (controller mode)
+
+1. On the device that will manage the others, turn on **Authentication**, then turn on **Settings → Controller mode** and save. A **Screens** tab appears, and port 8443 opens so screens can join.
+2. The **Screens** page shows the **Join information** with a **Copy** button. It can be reused for any number of screens. **Regenerate** makes the old one stop working; screens that already joined are not affected.
+
+From the **Screens** page you can:
+
+* **Publish to all screens** (or to one). Each screen's playlist is made to match the controller's: the same assets, schedules and order. Assets added directly on a managed screen are removed, and files that haven't changed are not uploaded again. Progress and the result are shown per screen.
+* **Reboot**, turn the **display on or off**, or skip to the **next or previous asset**, on every screen or on one. "This screen" (the controller, which also plays) is listed too; a bulk reboot never reboots the controller itself.
+* See which screens are **online**, their version, and an **activity log** of every action.
+* **Remove** a screen. Its token is revoked on the screen, and it keeps playing what it already has.
+
+A screen that goes offline keeps playing its last published schedule and is shown as **Offline** until it is back. A screen that leaves management closes its management port, so it also shows as **Offline**, with a note that it is up but not accepting management; remove it, or join it again. If a screen's token is revoked while its port stays open, it shows as **Left management** and is skipped by publishes until it joins again.
+
+Video lengths are measured by each screen, so a video's duration on a screen can differ from the value set on the controller.
+
+The controller stores each screen's token encrypted, with a key that is not part of backups. If you restore a controller's backup onto another device, the screens have to join again.
+
 ## TLS / SSL
 
 Anthias supports two independent SSL features:
