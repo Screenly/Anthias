@@ -65,6 +65,11 @@ DEFAULTS = {
         'display_power_on_time': '08:00',
         'display_power_off_time': '18:00',
         'display_power_days': '0,1,2,3,4,5,6',
+        # Optional per-weekday hours, 'D=HH:MM-HH:MM' comma-separated
+        # (e.g. '5=10:00-14:00'). A weekday without an entry uses the
+        # shared on/off times above; empty keeps one set of hours for
+        # every day, which is how every pre-existing schedule reads.
+        'display_power_day_times': '',
     },
     'viewer': {
         'audio_output': 'hdmi',

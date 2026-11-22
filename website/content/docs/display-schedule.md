@@ -1,12 +1,12 @@
 ---
 title: "Display Schedule"
-description: "Switch the screen off outside opening hours on a daily on/off schedule."
+description: "Switch the screen off outside opening hours on a daily on/off schedule, with optional per-weekday hours."
 slug: "display-schedule"
 ---
 
 A device can switch its screen off outside opening hours and back on in
-the morning, on a daily schedule with per-weekday selection. The
-schedule is **off by default**, so a device that has always stayed lit
+the morning, on a daily schedule with per-weekday selection and,
+optionally, different hours for each weekday. The schedule is **off by default**, so a device that has always stayed lit
 keeps doing so after an upgrade.
 
 Configure it under **Settings → Display schedule**.
@@ -34,6 +34,7 @@ adapter.
 | `display_power_on_time` | `HH:MM` | `08:00` | Time of day the display switches on |
 | `display_power_off_time` | `HH:MM` | `18:00` | Time of day the display switches off |
 | `display_power_days` | comma-separated ints `0`-`6` (Mon=0 … Sun=6) | `0,1,2,3,4,5,6` | Weekdays on which an on-period **begins** |
+| `display_power_day_times` | comma-separated `D=HH:MM-HH:MM` entries (Mon=0 … Sun=6) | empty | Per-weekday on/off times. A weekday without an entry uses `display_power_on_time` / `display_power_off_time`; empty means every day uses those shared times |
 
 Times are wall-clock in the device's configured timezone (**Settings →
 Timezone**), so they follow DST rather than drifting with it.
@@ -65,6 +66,18 @@ For example, on 18:00 → 06:00 with only Friday selected:
 A same-day schedule (on 08:00 → off 18:00) needs no special handling:
 the whole on-period falls on the selected day.
 
+With [different hours per day](#different-hours-per-day), an overnight
+period also ends at its **starting** day's off time, not the off time of
+the day it runs into. With Friday 18:00 → 02:00 and Saturday
+10:00 → 14:00:
+
+| Local time | Display | Why |
+| ---------- | ------- | --- |
+| Fri 23:00 | On | Friday's on-period |
+| Sat 01:00 | On | Still Friday's on-period, though Saturday's own hours start at 10:00 |
+| Sat 02:00 | Off | Friday's on-period ends at Friday's off time |
+| Sat 10:00 | On | Saturday's on-period starts |
+
 If the on and off times are identical, the schedule describes neither an
 on-period nor an off-period, and the device is left alone.
 
@@ -72,6 +85,29 @@ Deselecting every day means *every* day, not *no* day: an enabled
 schedule with no days selected would be silently inert, so the empty
 selection is treated as the full week. To stop the schedule entirely,
 switch it off.
+
+## Different hours per day
+
+By default every selected day uses the same on and off times. To give
+days their own hours, for example Monday to Friday 07:30 → 18:00 and
+Saturday 10:00 → 14:00, switch on **Different hours per day**. The
+shared time fields are replaced by one row per weekday, with the day's
+chip and its own on and off times. The first time you switch it on,
+every row starts from the shared times, so only the days that differ
+need editing.
+
+The day chips still decide which days are active. A deselected day keeps
+its hours (shown dimmed) but the display stays off that day; to keep the
+screen off all day, deselect the day rather than giving it identical on
+and off times, which the form rejects.
+
+Switching **Different hours per day** off again clears the per-day hours,
+and every selected day goes back to the shared times.
+
+Per-day hours are stored in `display_power_day_times`, for example
+`0=07:30-18:00,1=07:30-18:00,2=07:30-18:00,3=07:30-18:00,4=07:30-18:00,5=10:00-14:00`.
+The web form always writes an entry for all seven days. Through the API
+you can set only the days that differ; the rest use the shared times.
 
 ## Turning the schedule off
 
@@ -82,7 +118,7 @@ buttons are hidden entirely.
 
 ## Setting it through the API
 
-The four fields are readable and writable on the v2 device-settings
+The five fields are readable and writable on the v2 device-settings
 endpoint, alongside the rest of the settings page:
 
 ```bash
@@ -96,6 +132,14 @@ $ curl -X PATCH http://<device-ip>/api/v2/device_settings \
           "display_power_off_time": "22:00",
           "display_power_days": "0,1,2,3,4"
         }'
+
+# Saturday opens 10:00-14:00; every other day keeps 07:30-22:00
+$ curl -X PATCH http://<device-ip>/api/v2/device_settings \
+    -H 'Content-Type: application/json' \
+    -d '{
+          "display_power_days": "0,1,2,3,4,5",
+          "display_power_day_times": "5=10:00-14:00"
+        }'
 ```
 
 Unlike the web form, which keeps the previous value and shows a warning,
@@ -103,6 +147,11 @@ the API returns `400` for a malformed time or weekday: a client that
 explicitly sent a field should be told the value was wrong rather than
 have it reinterpreted. `HH:MM:SS` is accepted and normalized to `HH:MM`,
 and an empty `display_power_days` normalizes to every day.
+
+`display_power_day_times` is normalized to `HH:MM` and sorted by
+weekday. It returns `400` for a malformed entry, identical on and off
+times, or the same weekday given twice. An empty value clears every
+per-day entry.
 
 See the [API page](/api/) for the full endpoint reference.
 
