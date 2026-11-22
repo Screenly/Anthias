@@ -17,11 +17,11 @@
       answer: |
         Anthias is free, open-source digital signage software built by Screenly, Inc. Screenly is a paid, cloud-managed digital signage platform designed for professional multi-screen deployments. You can learn more about the differences on [screenly.io](https://www.screenly.io/screenly-vs-anthias/).
 
-        Choose **Screenly** if you need multi-screen management from a single account, enterprise user management, or professional support. Choose **Anthias** if you're comfortable managing individual devices and want a free, self-hosted solution.
+        Choose **Screenly** if you need to manage screens across locations from a single account, show different content on different screens, enterprise user management, or professional support. Choose **Anthias** if you want a free, self-hosted solution: it runs each screen on its own, and can publish one playlist to a few screens on the same network with [multi-screen management](/docs/multi-screen/).
 
     - question: What hardware do I need?
       answer: |
-        Anthias runs on [Raspberry Pi](https://www.raspberrypi.com/) 2 through 5, 64-bit x86 PCs (Intel NUC or similar), and, on a best-effort basis, generic 64-bit ARM single-board computers via [Armbian](https://www.armbian.com/) (Rock Pi, Orange Pi, Banana Pi and similar boards). You'll also need a screen with an HDMI input. We recommend a Raspberry Pi 4 or 5 for new installations.
+        Anthias runs on [Raspberry Pi](https://www.raspberrypi.com/) 2 through 5, 64-bit x86 PCs (Intel NUC or similar), and, on a best-effort basis, generic 64-bit ARM single-board computers via [Armbian](https://www.armbian.com/) (Rock Pi, Orange Pi, Banana Pi and similar boards). You'll also need a screen with an HDMI input. We recommend a Raspberry Pi 4 or 5 for new installations. If one device will manage the others with [multi-screen management](/docs/multi-screen/), make that one a Raspberry Pi 5, a Raspberry Pi 4 with at least 2 GB of RAM, or a PC.
 
     - question: Can I buy a ready-made Anthias player?
       answer: |
@@ -35,7 +35,9 @@
 
     - question: Can I manage multiple screens?
       answer: |
-        Each Anthias instance manages one screen. You can run multiple instances on separate devices, but each has its own dashboard. If you need centralized multi-screen management, [Screenly](https://www.screenly.io) is designed for that.
+        Yes, on a small scale. One Anthias device can act as a **controller** for the other Anthias screens on your local network: you build the playlist once, publish it to every screen, and see which screens are online and healthy from one page. Every screen shows the same playlist, and everything stays on your network. Every device, the controller and each screen, must have an accurate clock, either from NTP (network time) or a real-time clock (RTC); without it, multi-screen management does not work. See [multi-screen management](/docs/multi-screen/) for the recommended hardware and setup.
+
+        If you need different content on different screens, screens in several locations, or remote management over the internet, [Screenly](https://www.screenly.io) is designed for that.
 
     - question: Can I use Anthias commercially?
       answer: |
