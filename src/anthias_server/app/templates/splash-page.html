@@ -44,7 +44,19 @@
     <div class="splash-card__body">
       <p id="splash-status-detecting" class="splash-status">
         <span class="splash-status__dot splash-status__dot--pulse" aria-hidden="true"></span>
-        <span>Detecting network&hellip;</span>
+        <span id="splash-status-detecting-text">Detecting network&hellip;</span>
+      </p>
+      {% comment %}
+        Shown by splash.ts once the device has gone a while without an
+        address. A bare pulsing "Detecting network" reads as a hang to
+        someone watching a first boot; this says what happens next. The
+        WiFi setup screen replaces this page as soon as the setup network
+        is up, so the promise here is one the viewer keeps.
+      {% endcomment %}
+      <p id="splash-no-network-hint" class="splash-subhead" hidden>
+        No network yet. If this screen can&rsquo;t connect on its own, WiFi
+        setup instructions will appear here shortly. You can also plug in
+        an Ethernet cable.
       </p>
       <p id="splash-status-ready" class="splash-status" hidden>
         <span class="splash-status__dot splash-status__dot--ok" aria-hidden="true"></span>
