@@ -6,7 +6,7 @@ aliases:
   - "/docs/x86-installation/"
 ---
 
-Anthias runs on any 64-bit PC (something like an Intel NUC works well) once you've prepared a fresh Debian install. Pre-built BalenaOS images aren't available for PC hardware yet, so you'll install Debian manually and then run the standard Anthias installer on top of it.
+Anthias runs on any 64-bit PC (something like an Intel NUC works well) once you've prepared a fresh Debian install. This guide installs Debian manually and then runs the standard Anthias installer on top of it. (Each [release](https://github.com/Screenly/Anthias/releases/latest) also ships a pre-built balenaOS disk image for PCs, `anthias-x86.img.xz`; see [Using the images from the releases](/docs/install/#using-the-images-from-the-releases).)
 
 > **Note**
 >
@@ -73,7 +73,7 @@ Once you can SSH (or log in locally) to the new install:
    $ sudo apt install -y curl
    ```
 
-2. Allow your user to run `sudo` without entering a password. The Anthias installer expects this. Open the sudoers file:
+2. Optionally, allow your user to run `sudo` without entering a password. If you skip this, the Anthias installer asks for your sudo password during the install, then adds this rule itself. To add it now, open the sudoers file:
 
    ```bash
    $ sudo visudo

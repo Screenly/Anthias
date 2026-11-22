@@ -79,7 +79,7 @@ The screen is usually seen in passing, from across a room, by someone who did no
 
 Each screen is its own Pi, but you don't have to update them one by one. With [multi-screen management](/docs/multi-screen/), one device acts as the controller: you build the loop there and publish it to every screen on the same network, and you can see which screens are online and healthy from one page. A few more things help:
 
-- **Clone a configured device.** Download a backup file holding your settings and asset list, then restore it onto a new device instead of setting it up from scratch.
+- **Clone a configured device.** Download a backup file holding your settings and assets, then restore it onto a new device instead of setting it up from scratch.
 - **Deploy and update a fleet over the air** through [Balena](/docs/balena/), so you are not carrying cards around to push an update.
 - **Bring a library in from another platform** with the [built-in importer](/docs/import-content/), which supports Yodeck, ScreenCloud, piSignage and Xibo.
 

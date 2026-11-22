@@ -65,7 +65,7 @@
       answer: |
         Anthias uses [NetworkManager](https://wiki.debian.org/NetworkManager) for networking when the installer's "manage the network" prompt is enabled. SSH into the device and run `sudo nmtui` for an interactive UI, or use `nmcli device wifi connect <SSID> password <pwd>` from the command line.
 
-        If the screen can't reach a network at all, it sets one up for you: it creates a temporary WiFi network called **Anthias Setup** and shows the password and a QR code on the display. Join it, open http://192.168.42.1:8000, and pick the network the screen should use. See [WiFi Setup](/docs/wifi-setup/).
+        If the screen can't reach a network at all, it sets one up for you: it creates a temporary WiFi network whose name starts with **Anthias Setup** and shows its full name, the password and a QR code on the display. Join it, open http://192.168.42.1:8000, and pick the network the screen should use. See [WiFi Setup](/docs/wifi-setup/).
 
     - question: Can I assign a static IP address?
       answer: |
@@ -113,7 +113,7 @@
   items:
     - question: How do I rotate the screen for portrait orientation?
       answer: |
-        Use the Settings page in the Anthias dashboard ("Screen rotation"). On Pi 5 / x86 / arm64 the viewer runs under the `cage` kiosk Wayland compositor and the rotation is applied via `wlr-randr`. On Pi 2 / Pi 3 / Pi 4 the viewer renders to the Linux framebuffer directly and the transform is applied inside the media player; the Settings page works the same way.
+        Use the Settings page in the Anthias dashboard ("Screen rotation"). On Pi 5 / x86 / arm64 the viewer runs under the `cage` kiosk Wayland compositor and the rotation is applied via `wlr-randr`. On Pi 2 / Pi 3 / Pi 4 the viewer draws to the display directly, without a compositor, and the transform is applied inside the media player; the Settings page works the same way.
 
         Edit `/boot/firmware/config.txt` and add one of:
 
@@ -129,16 +129,16 @@
       answer: |
         Anthias displays at whatever resolution the OS reports. There's no resolution setting in the dashboard. Set the output mode at the OS level: on Raspberry Pi OS, use `sudo raspi-config` → **Display Options** → **Resolution**, or set `hdmi_group` / `hdmi_mode` in `/boot/firmware/config.txt`.
 
-        4K is supported on Pi 5 / x86 / arm64, those run the viewer under the `cage` Wayland compositor and the GPU handles the upscale for free. On Pi 4 the viewer renders to the Linux framebuffer directly and mpv hands video scaling to the V3D, so 1080p source on a 4K connector works smoothly; demanding 4K-source video on Pi 4 will drop frames, however, because the V3D doesn't have the bandwidth headroom Pi 5's V3D 7.1 has.
+        4K is supported on Pi 5 / x86 / arm64, those run the viewer under the `cage` Wayland compositor and the GPU handles the upscale for free. On Pi 4 the viewer draws to the display directly, without a compositor, and mpv hands video scaling to the V3D, so 1080p source on a 4K connector works smoothly; demanding 4K-source video on Pi 4 will drop frames, however, because the V3D doesn't have the bandwidth headroom Pi 5's V3D 7.1 has.
 
     - question: My screen is black or stuck on "Manage the content", what now?
       answer: |
         This usually means the viewer container can't reach the server, or there are no active assets. Try these in order:
 
-        1. SSH in and run `docker compose ps` from `~/anthias/`: all four containers (`anthias-server`, `anthias-celery`, `anthias-viewer`, `redis`) should be `Up`.
-        2. If a container is restarting, tail its logs: `docker logs -f anthias-anthias-viewer-1` (or `…-server-1`).
+        1. SSH in and run `docker compose ps` from `~/anthias/`: `anthias-server`, `anthias-caddy`, `anthias-celery`, `anthias-viewer`, and `redis` should all be `Up`.
+        2. If a container is restarting, read its logs: `sudo journalctl -f -t anthias-viewer` (or `-t anthias-server`). See [How to get logs from Anthias](/docs/#how-to-get-logs-from-anthias) for the other tags.
         3. Open the dashboard from another device and confirm at least one asset is **enabled** with a current schedule.
-        4. If the display has gone to power save, briefly unplug and reconnect the HDMI cable, or check the TV's input source. Anthias renders directly to KMS (via `cage` on Pi 5 / x86 / arm64, or Qt `linuxfb` on Pi 2 / Pi 3 / Pi 4) and uses no X server, so `xset` won't help.
+        4. If the display has gone to power save, briefly unplug and reconnect the HDMI cable, or check the TV's input source. Anthias renders directly to KMS (via `cage` on Pi 5 / x86 / arm64, Qt `eglfs` on Pi 4 and 64-bit Pi 3, or Qt `linuxfb` on Pi 2 / 32-bit Pi 3) and uses no X server, so `xset` won't help.
 
         If a recent update broke the display, running `~/anthias/bin/upgrade_containers.sh` re-creates the containers cleanly.
 
@@ -195,24 +195,29 @@
   items:
     - question: How do I get logs from Anthias?
       answer: |
-        SSH into the device and use either of these:
+        All Anthias services log to the host's journal. Without logging in to the device, fetch a snapshot over the REST API (when authentication is on, create a token under **Settings → API tokens** first):
 
         ```bash
-        # Tail a single container directly
-        docker logs -f anthias-anthias-server-1
-
-        # Or via Compose (run from ~/anthias/)
-        cd ~/anthias
-        docker compose logs -f anthias-server
+        curl -sk -H "Authorization: Bearer ${TOKEN}" \
+          "https://<device-ip>/api/v2/system/logs?container=anthias-anthias-server-1&count=200"
         ```
 
-        The container names are `anthias-anthias-server-1`, `anthias-anthias-celery-1`, `anthias-anthias-viewer-1`, and `anthias-redis-1`. If TLS is enabled, there's also `anthias-anthias-caddy-1`.
+        Or SSH into the device and read the journal by service tag, or go through Docker:
+
+        ```bash
+        sudo journalctl -f -t anthias-server
+        docker logs -f anthias-anthias-server-1
+        ```
+
+        The tags are `anthias-server`, `anthias-caddy`, `anthias-viewer`, `anthias-celery`, `anthias-redis`, and `anthias-wifi-connect`. On balena, use the device's logs in the balenaCloud dashboard or the same API call with `container=anthias-server`. By default Raspberry Pi OS keeps logs only since the last reboot; see [How to get logs from Anthias](/docs/#how-to-get-logs-from-anthias) for how to change that and for the full list of options.
 
     - question: Where are my assets stored, and how do I back them up?
       answer: |
-        The easy way: open the dashboard, go to **Settings**, and click **Get Backup** to download a single-file archive. To restore, click **Upload and Recover** on the same page.
+        The easy way: open the dashboard, go to **Settings**, and click **Get backup** under *Backup & restore* to download a single-file archive of your settings and assets. To restore, click **Upload & recover** on the same page, pick the file, and confirm with **Restore**.
 
-        If you'd rather copy the files manually, asset binaries live in `~/anthias_assets/` and configuration plus the SQLite database (`anthias.db`) live in `~/.anthias/`. Backing up both directories captures everything.
+        A backup leaves out the device's private keys (its certificate and, on a multi-screen controller, the controller's certificate authority) unless you turn on **Include this device's keys**, which needs authentication on and encrypts them with a password you choose. Restoring a backup revokes every API token in it and ends multi-screen management on a screen.
+
+        If you'd rather copy the files manually, asset binaries live in `~/anthias_assets/` and configuration plus the SQLite database (`anthias.db`) live in `~/.anthias/`. Backing up both directories captures everything, including those private keys under `~/.anthias/ssl/`, so keep such a copy as safe as the device itself.
 
     - question: How do I enable HTTPS?
       answer: |
@@ -240,15 +245,18 @@
 
         With `Host` preserved, Anthias's built-in same-host CSRF fallback handles HTTP-to-HTTPS scheme drift automatically.
 
-        **2. Tell Anthias the public hostname directly.** If you can't (or don't want to) change the proxy config, list the public origin in `CSRF_TRUSTED_ORIGINS`. From `~/anthias/`, edit `.env` (or your compose override) and add:
+        **2. Tell Anthias the public hostname directly.** If you can't (or don't want to) change the proxy config, list the public origin in the `CSRF_TRUSTED_ORIGINS` environment variable of the `anthias-server` container. The generated `docker-compose.yml` doesn't pass that variable through, so setting it in `.env` has no effect; add a `docker-compose.override.yml` next to it in `~/anthias/` instead:
 
+        ```yaml
+        services:
+          anthias-server:
+            environment:
+              - CSRF_TRUSTED_ORIGINS=https://signage.example.com
         ```
-        CSRF_TRUSTED_ORIGINS=https://signage.example.com
-        ```
 
-        Multiple origins are comma-separated. Restart with `docker compose up -d`.
+        Multiple origins are comma-separated. Apply it with `docker compose up -d` from `~/anthias/`. The upgrade script only reads `docker-compose.yml`, so run `docker compose up -d` again after each upgrade.
 
-        A proxy can also cap how large an upload may be, which is a different failure from the `Host` problem above: everything works except large videos. Anthias sets no size limit of its own, and the bundled Caddy sidecar disables one explicitly, so any limit you hit belongs to your proxy. nginx defaults to 1 MB, and Cloudflare rejects request bodies over 100 MB on its Free and Pro plans.
+        A proxy can also cap how large an upload may be, which is a different failure from the `Host` problem above: everything works except large videos. Neither Anthias nor its built-in Caddy front end limits the size of an upload, so any limit you hit belongs to your proxy. nginx defaults to 1 MB, and Cloudflare rejects request bodies over 100 MB on its Free and Pro plans.
 
         | Proxy      | Directive                                                  |
         | ---------- | ---------------------------------------------------------- |
@@ -264,7 +272,7 @@
         upload_chunk_size_mb = 8
         ```
 
-        The change applies on the next page load. That file holds the device's own settings and isn't touched by upgrades, so the value stays put. On balena, where you have a dashboard instead of a shell, set `ANTHIAS_UPLOAD_CHUNK_SIZE_MB` as a device or service variable — the config file wins if both are set.
+        Restart the server for the change to apply (`docker compose restart anthias-server` from `~/anthias/`, or reboot), then reload the page. That file holds the device's own settings and isn't touched by upgrades, so the value stays put. On balena, where you have a dashboard instead of a shell, set `ANTHIAS_UPLOAD_CHUNK_SIZE_MB` as a device or service variable — the config file wins if both are set.
 
         Values are clamped to 1–24 MB. The ceiling keeps each chunk inside the server's in-memory upload buffer, which matters on a 512 MB board; below 1 MB a large video turns into thousands of requests.
 
@@ -272,13 +280,14 @@
 
     - question: Where is the API reference?
       answer: |
-        See the [API page](/api/) for endpoints grouped by tag with their parameters and response schemas. The live ReDoc-rendered docs are also served straight from each device at `http://<device-ip>/api/docs/`.
+        See the [API page](/api/) for endpoints grouped by tag with their parameters and response schemas. The live ReDoc-rendered docs are also served straight from each device at `https://<device-ip>/api/docs/` (sign in first if authentication is on).
 
     - question: How do I authenticate API calls?
       answer: |
-        Devices with the **Basic** authentication mode enabled in **Settings** require credentials on every API call. Two paths resolve to the same operator account:
+        Devices with authentication turned on in **Settings** (method **Basic auth**) require credentials on every API call. Three paths resolve to the same operator account:
 
+        * **API token** *(use this for scripts and other devices)*. Create one under **Settings → API tokens**, copy it right away (only a hash is stored), and send `Authorization: Bearer <token>`. Tokens are only accepted over HTTPS, can be revoked one by one, and survive a password change. They can't create or restore backups; use the web interface for that. See [Authenticating with API tokens](/docs/#authenticating-with-api-tokens).
         * **Browser session cookie**: what the dashboard uses. Treat this path as **browser-only**: a naive headless POST to `/login/` will 403 because the login form itself is CSRF-protected (the script has to GET `/login/` first, parse out the `csrfmiddlewaretoken` form field and the `csrftoken` cookie, then POST both back), and DRF's `SessionAuthentication` enforces CSRF *again* on every API write (`POST` / `PUT` / `PATCH` / `DELETE`) by requiring an `X-CSRFToken` header. Cookie-only scripts that skip either step get 403s.
-        * **HTTP Basic** *(legacy, deprecated: use this for headless automation today)*. `Authorization: Basic <base64(user:pass)>`. Retained for back-compat with pre-2826 Anthias-CLI and third-party scripts; the server logs a `DEPRECATED:` warning the first time it sees each `(user, client IP, path)` tuple and then again roughly once an hour for the same tuple (throttled so a polling client doesn't flood the log). A UI-managed personal-token system that will replace Basic for headless callers is tracked as a follow-up.
+        * **HTTP Basic** *(legacy, deprecated in favor of API tokens)*. `Authorization: Basic <base64(user:pass)>`. Retained for back-compat with pre-2826 Anthias-CLI and third-party scripts; the server logs a `DEPRECATED:` warning the first time it sees each `(user, client IP, path)` tuple and then again roughly once an hour for the same tuple (throttled so a polling client doesn't flood the log).
 
-        Devices with authentication disabled (the default on a fresh install) accept either of these but don't require them.
+        Devices with authentication disabled (the default on a fresh install) don't require credentials and ignore any that are sent. API tokens can't be created in that mode, and existing ones stay inactive until authentication is turned back on.

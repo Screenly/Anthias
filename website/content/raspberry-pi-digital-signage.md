@@ -75,13 +75,13 @@ The dashboard runs on the device itself, on your network. There is no app to ins
 - **Remote restart and shutdown**, which matters once your screens are scattered around a building.
 - **Screen rotation** for portrait installs, and a **display schedule** that switches the screen off outside opening hours. See the [display schedule documentation](/docs/display-schedule/).
 
-If the screen is somewhere public, turn on username and password protection, and encrypt the dashboard over HTTPS with a self-signed certificate, a free auto-renewing one for your own domain, or your own certificate.
+The dashboard is served over HTTPS from the first boot, using the screen's own self-signed certificate. You can swap in your own certificate from Settings, or a free auto-renewing one for your own domain. If the screen is somewhere public, turn on username and password protection too; until you do, every page carries a warning.
 
 ## Bringing content with you
 
 Moving from another platform does not mean rebuilding your library. Anthias has a built-in import wizard for **Yodeck, ScreenCloud, piSignage and Xibo**: paste an API token, review what it finds, and import. See the [import documentation](/docs/import-content/), or the [Yodeck comparison](/yodeck-alternative/) if that is where you are coming from.
 
-A single backup file holds your settings and asset list, so you can restore it later or move it onto a brand-new device rather than setting one up from scratch.
+A single backup file holds your settings and assets, so you can restore it later or move it onto a brand-new device rather than setting one up from scratch.
 
 ## More than one screen
 
@@ -124,7 +124,7 @@ Yes. Add the page as an asset and set an auto-refresh interval, so a dashboard, 
 
 ### How do I set up a second screen?
 
-Install Anthias on another device. To avoid repeating the configuration, download the backup file from the first one and restore it onto the new device, then adjust the playlist.
+Install Anthias on another device. To avoid repeating the configuration, download the backup file from the first one and restore it onto the new device, then adjust the playlist. If both screens should show the same playlist, make the first one a [multi-screen](/docs/multi-screen/) controller and join the new one to it instead.
 
 ### Can I run it in portrait?
 

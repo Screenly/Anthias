@@ -86,9 +86,9 @@ The four fields are readable and writable on the v2 device-settings
 endpoint, alongside the rest of the settings page:
 
 ```bash
-$ curl http://<device-ip>/api/v2/device_settings
+$ curl -k https://<device-ip>/api/v2/device_settings
 
-$ curl -X PATCH http://<device-ip>/api/v2/device_settings \
+$ curl -k -X PATCH https://<device-ip>/api/v2/device_settings \
     -H 'Content-Type: application/json' \
     -d '{
           "display_power_schedule_enabled": true,
@@ -103,6 +103,11 @@ the API returns `400` for a malformed time or weekday: a client that
 explicitly sent a field should be told the value was wrong rather than
 have it reinterpreted. `HH:MM:SS` is accepted and normalized to `HH:MM`,
 and an empty `display_power_days` normalizes to every day.
+
+`-k` accepts the screen's own self-signed certificate; drop it if you
+have [uploaded a trusted one](/docs/#tls--ssl). With authentication on,
+add an [API token](/docs/#authenticating-with-api-tokens)
+(`-H 'Authorization: Bearer …'`).
 
 See the [API page](/api/) for the full endpoint reference.
 

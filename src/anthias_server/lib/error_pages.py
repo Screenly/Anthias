@@ -65,7 +65,7 @@ code{color:#e7e9ee}
 <p>The server hit an unexpected error, and could not read its own
 error page from disk &mdash; usually a sign that this device's
 storage is failing or full.</p>
-<p>Check the device logs (<code>docker logs anthias-server</code>),
+<p>Check the device logs (<code>sudo journalctl -t anthias-server</code>),
 and the free space and health of the SD card.</p>
 </main>
 </body>

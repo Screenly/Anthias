@@ -23,10 +23,10 @@ copy-pasteable, and each one was run against a real device.
 
 | | What it is |
 | --- | --- |
-| Base URL | `http://<device-ip>/api/v2/` (port 80; a dev server uses 8000) |
+| Base URL | `https://<device-ip>/api/v2/` (port 443, self-signed by default). Plain `http://` on port 80 still answers `/api/*` for one more release; a dev server uses `http://` on 8000 |
 | Format | JSON, except uploads, which are `multipart/form-data` |
-| Machine-readable schema | `http://<device-ip>/api/schema/` — the device's own OpenAPI document |
-| Human-readable reference | [anthias.screenly.io/api/](/api/), and `http://<device-ip>/api/docs/` on the device |
+| Machine-readable schema | `https://<device-ip>/api/schema/` — the device's own OpenAPI document |
+| Human-readable reference | [anthias.screenly.io/api/](/api/), and `https://<device-ip>/api/docs/` on the device |
 | Versions | `v2` (use this), plus `v1`, `v1.1` and `v1.2` kept for compatibility |
 
 Fetch `/api/schema/` first if you want the authoritative field list for the exact
@@ -35,10 +35,12 @@ serializers, so it cannot drift from the running code. It stays readable without
 credentials even when authentication is on, so it is safe to use as a capability
 probe. `/api/docs/`, the rendered reference, follows the normal auth rules.
 
-There is no central server and no cross-device identity. Each player holds its own
-assets, its own settings and its own `asset_id` values, and the same image pushed
-to three devices gets three unrelated ids. Treat the device list as the unit of
-work and reconcile by `name`, not by id.
+There is no central server and no cross-device identity unless you set one up.
+Each player holds its own assets, its own settings and its own `asset_id` values,
+and the same image pushed to three devices gets three unrelated ids. Treat the
+device list as the unit of work and reconcile by `name`, not by id. (One device
+can optionally act as a [multi-screen controller](/docs/multi-screen/) for the
+others; see [Scheduling across N screens](#scheduling-across-n-screens).)
 
 ## 1. Install a player
 
@@ -49,9 +51,10 @@ Debian x86 machine, the installer is one command:
 $ bash <(curl -sL https://install-anthias.srly.io)
 ```
 
-It is an interactive installer, not a silent one. It asks four questions — confirm
-the install, whether Anthias should manage the network, which version to install,
-and whether to run a full system upgrade — through full-screen dialogs, so it
+It is an interactive installer, not a silent one. It asks for an HTTP proxy
+(leave it blank for none), then to confirm the install, whether Anthias should
+manage the network, which version to install and whether to run a full system
+upgrade, and at the end whether to reboot. These are full-screen dialogs, so it
 needs a terminal. An agent driving it over SSH must allocate a PTY and answer the
 prompts:
 
@@ -120,7 +123,18 @@ A wrong or missing current password returns `400` with an `error` field, not a
 silent no-op. Sending `"auth_backend": ""` with the correct `current_password`
 turns authentication back off.
 
-From then on, authenticate with HTTP Basic on every call:
+From then on, every call needs credentials. The intended headless credential is
+an **API token**: a person signs in to the web interface, opens **Settings → API
+tokens**, gives the token a name and clicks **Create token**. It is shown once;
+send it as a Bearer header, over HTTPS only:
+
+```bash
+$ curl -H 'Authorization: Bearer anthias_…' https://<device-ip>/api/v2/assets
+```
+
+Tokens are created and revoked only in the web interface, not over the API, so an
+agent that has nothing but `curl` and the password falls back to HTTP Basic, which
+the examples below use:
 
 ```bash
 $ curl -u agent:<strong-password> http://<device-ip>/api/v2/assets
@@ -136,15 +150,16 @@ Three things worth knowing before you write the client:
   that is not a `2xx` as a failure. Wrong credentials give a clean `401`.
 - **Use `https://`.** Every device serves the API over HTTPS on port 443.
   Plain HTTP on port 80 still answers `/api/*` for one more release, but Basic
-  auth there crosses the network in reversible encoding. By default the device
-  uses its own self-signed certificate, so either pin it or upload a trusted
-  certificate (Settings → HTTPS certificate, or `./bin/enable_ssl.sh`) and use
-  the hostname on it.
-- **Basic is the supported headless path today, and the server logs a deprecation
-  warning each time it is used** (throttled, so a polling client does not flood
-  the log). It keeps working; a token-based scheme is intended to replace it
-  later. Pin your integration to `v2` and read `/api/schema/` on each device so a
-  future change is something you detect rather than something that surprises you.
+  auth there crosses the network in reversible encoding, and a token sent over
+  it is refused with `401`. By default the device uses its own self-signed
+  certificate, so either pin it or upload a trusted certificate (Settings →
+  HTTPS certificate, or `./bin/enable_ssl.sh`) and use the hostname on it.
+- **Basic is deprecated, and the server logs a deprecation warning when it is
+  used** (throttled, so a polling client does not flood the log). It keeps
+  working for older clients; prefer a token. A token can do everything on the
+  API except create or restore backups. Pin your integration to `v2` and read
+  `/api/schema/` on each device so a future change is something you detect
+  rather than something that surprises you.
 
 ## 3. Put content on the screen
 
@@ -274,9 +289,16 @@ $ curl -u agent:<strong-password> \
 
 ## Scheduling across N screens
 
-There is no fan-out endpoint, because there is no central server — you loop. That
-is the whole mechanism, and it is worth stating plainly, because it is what makes
-the fleet an agent's problem rather than a platform's.
+There is no fan-out endpoint in the API — you loop. That is the whole mechanism,
+and it is worth stating plainly, because it is what makes the fleet an agent's
+problem rather than a platform's.
+
+The one exception is [multi-screen management](/docs/multi-screen/): one device
+acts as a controller and a person publishes its playlist to every screen that has
+joined it, from the controller's **Screens** page. A screen that has joined a
+controller shuts its own web interface, and its API answers `403` on ports 80 and
+443, so don't include joined screens in the loop: put the content on the
+controller instead.
 
 ```python
 import requests
@@ -344,6 +366,7 @@ Four habits make this reliable:
 | Endpoint | Use |
 | --- | --- |
 | `GET /api/v2/info` | Version, uptime, free space, memory, storage health — fleet monitoring |
+| `GET /api/v2/system/logs` | A snapshot of the host's system journal, for diagnosing a misbehaving player |
 | `GET /api/v2/assets` | What is on this device right now |
 | `DELETE /api/v2/assets/<asset_id>` | Remove an item |
 | `PATCH /api/v2/device_settings` | Player name, timezone, default durations, screen rotation, authentication |
@@ -354,15 +377,21 @@ Four habits make this reliable:
 
 `backup` and `recover` are the fastest honest way to stand up screen number two:
 configure one device properly, take the backup, restore it on the rest, then let
-the agent manage content per device from there.
+the agent manage content per device from there. They need the operator's
+credentials, not a token. A backup leaves out the device's own keys unless they
+are explicitly included, so a restored screen keeps its own identity, and
+restoring revokes every API token in the backup, so create tokens on each device
+afterwards.
 
 ## Limits worth knowing up front
 
-Anthias manages content **per device**. There is no fleet-wide playlist, no
-grouping, no role model and no audit trail — an agent that wants those keeps them
-on its own side. Credentials are a single operator account per device, so there is
-no separate machine identity to revoke if you want to cut an agent off; rotating
-the password cuts off everything, the dashboard included. Scheduling is dates,
+Over the API, Anthias manages content **per device**. Multi-screen management can
+mirror one playlist to a handful of screens, but there is no grouping, no role
+model and no audit trail of API changes. An agent that wants those keeps them on
+its own side. Each device has a single operator account; give an agent its own
+API token so you can cut it off by revoking that token, without changing the
+password the dashboard uses (changing the password does not revoke tokens).
+Scheduling is dates,
 weekdays and a daily window, evaluated in the device's local timezone, which is
 worth setting explicitly via `device_settings` on a geographically spread fleet.
 

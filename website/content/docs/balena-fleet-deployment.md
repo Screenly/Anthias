@@ -62,6 +62,12 @@ it's less than the total memory of your device. For example, for a 4GB Raspberry
 Pi 4, you can use `256` as the GPU memory value. Having insufficient GPU memory
 might cause video playback issues.
 
+On a Raspberry Pi 5, skip `gpu_mem` (the Pi 5 ignores it) and set the overlay to
+`vc4-kms-v3d,cma-512` instead, which 4K HEVC playback needs. PC (`x86`) and
+Rock Pi 4 fleets need none of these variables, since they only apply to the
+Raspberry Pi's `config.txt`. The values Anthias uses on its own fleets are in
+[`balena-host-config.json`](https://github.com/Screenly/Anthias/blob/master/balena-host-config.json).
+
 You can confirm that the changes went through by running the following command:
 
 ```bash
@@ -101,12 +107,12 @@ Run the following command:
 ```bash
 $ ./bin/deploy_to_balena.sh \
     --board $BOARD_TYPE \
-    --fleet $FLEET_NAME \
+    --fleet $FLEET_NAME
 ```
 
-`$BOARD_TYPE` is one of `pi2`, `pi3`, `pi3-64`, `pi4-64`, or `pi5` (`pi3`
-is the legacy 32-bit Raspberry Pi 3 image; `pi3-64` is the recommended
-64-bit/Qt 6 image for Pi 3 hardware). Run
+`$BOARD_TYPE` is one of `pi2`, `pi3`, `pi3-64`, `pi4-64`, `pi5`, `x86`, or
+`rockpi4` (`pi3` is the legacy 32-bit Raspberry Pi 3 image; `pi3-64` is the
+recommended 64-bit/Qt 6 image for Pi 3 hardware). Run
 `./bin/deploy_to_balena.sh --help` for the current list of supported boards.
 
 Running the command above will pull the latest Docker images from GHCR and

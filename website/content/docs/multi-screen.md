@@ -135,7 +135,8 @@ can't be used to add a device later; reload the **Screens** page for
 new join information. **Regenerate** makes the current one stop working
 at once, for example if it was shared by mistake. Screens that already
 joined are not affected. The controller only calls a joining screen
-back on port 8443, never on its own loopback or internal addresses.
+back on port 8443, never on loopback, link-local or other special
+addresses, or on Anthias's own internal service names.
 
 ## Add a screen
 
@@ -150,7 +151,7 @@ back on port 8443, never on its own loopback or internal addresses.
 4. Click **Join controller**.
 
 The screen now shows **Waiting for approval** with a short **check
-code**, such as `K7QX-4MRA-9ZTD`. Nothing is trusted yet: the request only
+code**, such as `K7QX-4MRA-2ZTD`. Nothing is trusted yet: the request only
 appears on the controller.
 
 5. On the controller's **Screens** page, the screen is listed under
@@ -187,7 +188,7 @@ From there:
   playlist is made to match the controller's: the same assets, schedules
   and order. Files that haven't changed are not uploaded again, so
   publishing an unchanged playlist takes about a second. Two screens
-  are published to at a time (one on a single-core board) and the rest
+  are published to at a time (one on a single- or dual-core board) and the rest
   wait their turn, so the controller's own display schedule and
   content checks are never held up. An asset that is still being
   processed, or whose file is missing, is left out of that publish, and
@@ -195,7 +196,7 @@ From there:
 * **Previous asset**, **Next asset**, **Display on** and **Display off**
   on every screen, or on one from its **⋯** menu. Display on/off needs a display that
   supports HDMI-CEC.
-* **Reboot** every screen or one. A bulk reboot never reboots the
+* **Reboot all** screens, or one with **Reboot** from its **⋯** menu. A bulk reboot never reboots the
   controller itself.
 * **Check now** refreshes the status of every screen immediately.
 * **Remove** a screen, from its **⋯** menu. Its access token is revoked on the screen, and
@@ -333,12 +334,13 @@ device does not clone its identity, and a copied backup file can never
 be used to vouch for a device. The catch: if you restore a
 controller's backup onto new hardware, every screen has to join again.
 
-To move a controller (or a screen) to new hardware without that, turn
+To move a controller to new hardware without that, turn
 on **Include this device's keys** under **Settings → Backup &
 restore** and choose a password before clicking **Get backup**.
 Authentication must be on, and you confirm your current sign-in
 password: anyone holding these keys can stand in for the device. Every
-export, and every refused attempt, is logged, and on a controller it
+export, and every attempt refused for a missing or wrong sign-in
+password, is logged, and on a controller it
 also shows under **Activity** on the **Screens** page. The
 keys are added to the backup encrypted with that password
 (AES-256-GCM, with the key derived from your password by scrypt), the
@@ -351,7 +353,9 @@ keys are left out. A wrong password restores nothing.
 
 Restoring a backup revokes every API token in it and ends
 multi-screen management on a screen, so a restored backup can't bring
-back old credentials. Join the screen again afterwards.
+back old credentials. Join the screen again afterwards. This holds for a
+backup with keys too: a screen restored from one keeps its identity
+certificate, but still has to join again.
 
 Keep a backup with keys as safe as the device itself: whoever has it
 and the password can stand in for the controller. Restore it on one
@@ -374,8 +378,9 @@ that it may have left management. Remove it there, or join it again.
 If you haven't opted out of anonymous usage statistics, Anthias reports
 once a day whether a device is a controller or a managed screen. A
 controller also reports counts for the screens it manages: how many
-there are, how many are online or offline, how many publishes succeeded
-or failed, and how many screens have each kind of health warning. No
+there are, how many are online, offline or in another state, how many
+screens' last publish succeeded or failed, and how many screens have
+each kind of health warning. No
 names, addresses, certificate fingerprints or content are sent. Opting
 out turns this off together with the rest of the usage statistics.
 
@@ -387,7 +392,7 @@ different device. Copy the join information from the controller's
 **Screens** page again.
 
 **"The controller rejected the join information."** It was regenerated
-after you copied it. Copy it again.
+after you copied it, or more than an hour has passed. Copy it again.
 
 **The screen keeps showing "Waiting for approval".** Approve it on the
 controller's **Screens** page. If it isn't listed there, the request
@@ -397,8 +402,9 @@ join again.
 **The check codes don't match.** Don't approve the request. Reject it,
 and check which device is using that screen's address.
 
-**"That request has expired."** Nobody approved it within 24 hours.
-Click **Cancel request** on the screen and join again.
+**"That request has expired."** (shown on the controller when you
+approve) Nobody approved it within 24 hours. Click **Cancel request** on
+the screen and join again.
 
 **"This controller's certificate authority is unusable."** The
 controller's `ca.key` or `ca.crt` (in `~/.anthias/ssl/controller/`)
