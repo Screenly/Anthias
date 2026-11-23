@@ -4,6 +4,15 @@ title = "Anthias - Free Open Source Digital Signage Software"
 
 disableKinds = ['taxonomy']
 
+# The docs search index (layouts/docs/list.searchindex.json), written
+# once at /docs/search-index.json and fetched by assets/js/docs-search.ts
+# the first time someone uses the search box.
+[outputFormats.searchindex]
+  mediaType = 'application/json'
+  baseName = 'search-index'
+  isPlainText = true
+  notAlternative = true
+
 [markup]
   [markup.highlight]
     codeFences = true
