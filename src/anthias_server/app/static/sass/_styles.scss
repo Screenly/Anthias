@@ -1315,6 +1315,26 @@ label { text-align: left; }
     letter-spacing: 0.04em;
     font-weight: 600;
   }
+
+  // A textarea scrolls its text through its own top padding, which is
+  // where the lifted label sits: pasting a long value scrolls to the
+  // caret and the lines run under the label. Mask that strip with the
+  // field's background, stopping short of the right edge so the
+  // scrollbar stays visible.
+  &:has(> textarea.app-input)::before {
+    content: '';
+    position: absolute;
+    inset: 1px 1rem auto 1px;
+    height: 1.25rem;
+    border-top-left-radius: var(--radius-md);
+    background-color: var(--color-surface);
+    pointer-events: none;
+    z-index: 1;
+  }
+  &:has(> textarea.app-input:disabled, > textarea.app-input[readonly])::before {
+    background-color: var(--color-surface-tint);
+  }
+  > textarea.app-input ~ label { z-index: 2; }
 }
 
 .app-check {
