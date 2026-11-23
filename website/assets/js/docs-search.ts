@@ -286,7 +286,9 @@ if (root && input && list) {
     if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
       if (!open) return
       ev.preventDefault()
-      setActive(active + (ev.key === 'ArrowDown' ? 1 : -1))
+      // From no selection, Down picks the first result and Up the last.
+      if (ev.key === 'ArrowDown') setActive(active + 1)
+      else setActive(active === -1 ? -1 : active - 1)
     } else if (ev.key === 'Enter') {
       const target = options()[active === -1 ? 0 : active]
       if (open && target) {
