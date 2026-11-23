@@ -105,18 +105,33 @@ function search(docs: Doc[], query: string): Hit[] {
     .slice(0, MAX_RESULTS)
 }
 
-// A regex that finds any query word at the start of a word in the
-// original (unfolded) text, for the snippet and the highlights.
+// `text` with accents dropped and in lower case, one character for one,
+// so a match in it is at the same offsets in `text`. Characters that
+// would change length are left as they are.
+function plain(text: string): string {
+  return Array.from(text, (c) => {
+    const f = c
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+    return f.length === c.length ? f : c
+  }).join('')
+}
+
+// A regex that finds any query word at the start of a word, for the
+// snippet and the highlights. It runs on plain(text) and lets a hyphen
+// or apostrophe sit between letters, so "wifi" marks "Wi-Fi" the same
+// way the search matched it.
 function matcher(words: string[]): RegExp {
-  const escaped = words
+  const patterns = [...words]
     .sort((a, b) => b.length - a.length)
-    .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-  return new RegExp(`(?<![\\p{L}\\p{N}])(?:${escaped.join('|')})`, 'giu')
+    .map((w) => Array.from(w).join("[-'’]?"))
+  return new RegExp(`(?<![\\p{L}\\p{N}])(?:${patterns.join('|')})`, 'gu')
 }
 
 function snippet(text: string, re: RegExp): string {
   re.lastIndex = 0
-  const first = re.exec(text)
+  const first = re.exec(plain(text))
   if (!first || text.length <= SNIPPET_LENGTH) {
     return text.length > SNIPPET_LENGTH
       ? `${text.slice(0, SNIPPET_LENGTH).trimEnd()}…`
@@ -134,11 +149,11 @@ function snippet(text: string, re: RegExp): string {
 function appendHighlighted(el: HTMLElement, text: string, re: RegExp): void {
   re.lastIndex = 0
   let last = 0
-  for (const m of text.matchAll(re)) {
+  for (const m of plain(text).matchAll(re)) {
     const i = m.index ?? 0
     if (i > last) el.append(text.slice(last, i))
     const mark = document.createElement('mark')
-    mark.textContent = m[0]
+    mark.textContent = text.slice(i, i + m[0].length)
     el.append(mark)
     last = i + m[0].length
   }
