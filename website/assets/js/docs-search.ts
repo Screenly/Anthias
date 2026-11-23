@@ -23,6 +23,12 @@ interface Hit {
   matched: number
 }
 
+interface Results {
+  hits: Hit[]
+  // True when no record has every query word, so these are the closest.
+  partial: boolean
+}
+
 const MAX_RESULTS = 8
 const SNIPPET_LENGTH = 160
 
@@ -46,8 +52,11 @@ function fold(s: string): string {
 // Hyphenated and contracted words also go in whole ("Wi-Fi" as "wifi"),
 // so a search finds them however the visitor spells them.
 function joined(s: string): string {
-  const words = s.match(/[\p{L}\p{N}]+(?:[-'’][\p{L}\p{N}]+)+/gu) ?? []
-  return words.map((w) => fold(w).replace(/ /g, '')).join(' ')
+  return s
+    .split(/\s/)
+    .filter((w) => /[\p{L}\p{N}][-'’][\p{L}\p{N}]/u.test(w))
+    .map((w) => fold(w).replace(/ /g, ''))
+    .join(' ')
 }
 
 function index(s: string): string {
@@ -93,16 +102,18 @@ function score(doc: Doc, words: string[], phrase: string): Hit {
 
 // Records that have every query word come first. When none does, show
 // the ones that have the most of them rather than nothing at all.
-function search(docs: Doc[], query: string): Hit[] {
+function search(docs: Doc[], query: string): Results {
   const words = terms(query)
-  if (!words.length) return []
   const phrase = words.join(' ')
   const hits = docs.map((d) => score(d, words, phrase)).filter((h) => h.matched)
   const best = Math.max(0, ...hits.map((h) => h.matched))
-  return hits
-    .filter((h) => h.matched === best)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_RESULTS)
+  return {
+    hits: hits
+      .filter((h) => h.matched === best)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, MAX_RESULTS),
+    partial: best < words.length,
+  }
 }
 
 // `text` with accents dropped and in lower case, one character for one,
@@ -126,7 +137,10 @@ function matcher(words: string[]): RegExp {
   const patterns = [...words]
     .sort((a, b) => b.length - a.length)
     .map((w) => Array.from(w).join("[-'’]?"))
-  return new RegExp(`(?<![\\p{L}\\p{N}])(?:${patterns.join('|')})`, 'gu')
+  return new RegExp(
+    String.raw`(?<![\p{L}\p{N}])(?:${patterns.join('|')})`,
+    'gu',
+  )
 }
 
 function snippet(text: string, re: RegExp): string {
@@ -215,7 +229,7 @@ if (root && input && list) {
     list.replaceChildren(li)
   }
 
-  const render = (hits: Hit[], query: string): void => {
+  const render = ({ hits, partial }: Results, query: string): void => {
     active = -1
     input.removeAttribute('aria-activedescendant')
     if (!hits.length) {
@@ -251,6 +265,12 @@ if (root && input && list) {
       li.append(a)
       return li
     })
+    if (partial) {
+      const note = document.createElement('li')
+      note.className = 'docs-search-note'
+      note.textContent = 'No section has every word. Closest matches:'
+      items.unshift(note)
+    }
     list.replaceChildren(...items)
     if (statusEl) {
       statusEl.textContent = `${hits.length} result${hits.length === 1 ? '' : 's'}`
@@ -266,9 +286,9 @@ if (root && input && list) {
       return
     }
     try {
-      const hits = search(await load(), query)
+      const results = search(await load(), query)
       // A newer keystroke may have landed while the index loaded.
-      if (input.value === query) render(hits, query)
+      if (input.value === query) render(results, query)
     } catch {
       message('Search is unavailable right now. Please try again.')
       setOpen(true)
@@ -281,31 +301,42 @@ if (root && input && list) {
   })
   input.addEventListener('input', () => void update())
 
-  input.addEventListener('keydown', (ev) => {
-    const open = !list.classList.contains('hidden')
-    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
-      if (!open) return
+  const isOpen = (): boolean => !list.classList.contains('hidden')
+
+  // From no selection, Down picks the first result and Up the last.
+  const move = (ev: KeyboardEvent): void => {
+    if (!isOpen()) return
+    ev.preventDefault()
+    if (ev.key === 'ArrowDown') setActive(active + 1)
+    else setActive(active === -1 ? -1 : active - 1)
+  }
+
+  const open = (ev: KeyboardEvent): void => {
+    const target = options()[active === -1 ? 0 : active]
+    if (!isOpen() || !target) return
+    ev.preventDefault()
+    target.click()
+  }
+
+  // Esc closes the list, then clears the box, then leaves it.
+  const escape = (ev: KeyboardEvent): void => {
+    if (isOpen()) {
       ev.preventDefault()
-      // From no selection, Down picks the first result and Up the last.
-      if (ev.key === 'ArrowDown') setActive(active + 1)
-      else setActive(active === -1 ? -1 : active - 1)
-    } else if (ev.key === 'Enter') {
-      const target = options()[active === -1 ? 0 : active]
-      if (open && target) {
-        ev.preventDefault()
-        target.click()
-      }
-    } else if (ev.key === 'Escape') {
-      if (open) {
-        ev.preventDefault()
-        setOpen(false)
-      } else if (input.value) {
-        input.value = ''
-      } else {
-        input.blur()
-      }
+      setOpen(false)
+    } else if (input.value) {
+      input.value = ''
+    } else {
+      input.blur()
     }
-  })
+  }
+
+  const keys: Record<string, (ev: KeyboardEvent) => void> = {
+    ArrowDown: move,
+    ArrowUp: move,
+    Enter: open,
+    Escape: escape,
+  }
+  input.addEventListener('keydown', (ev) => keys[ev.key]?.(ev))
 
   // Close when focus or a click lands outside the search box. Clicking a
   // result follows its link; same-page anchors also close the list.

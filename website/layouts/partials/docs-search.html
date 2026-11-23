@@ -26,7 +26,7 @@
         class="w-full rounded-full bg-white/10 hover:bg-white/15 focus:bg-white/15 border border-white/15 text-white placeholder:text-white/50 text-sm py-2.5 pl-11 pr-14 transition"
     >
     <kbd class="docs-search-kbd pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[0.7rem] font-sans text-white/50 border border-white/20 rounded px-1.5 py-0.5" aria-hidden="true">/</kbd>
-    <ul id="docs-search-results" role="listbox" aria-label="Search results" class="docs-search-results hidden"></ul>
+    <ul id="docs-search-results" role="listbox" aria-label="Search results" class="docs-search-results hidden"></ul> <!-- NOSONAR: WAI-ARIA combobox pattern; a datalist cannot show the headings and excerpts in each result -->
     <span class="sr-only" aria-live="polite" data-search-status></span>
 </div>
 {{- end }}
