@@ -352,14 +352,18 @@ if (root && input && list) {
   })
 
   // "/" or Ctrl/Cmd+K jumps to the box from anywhere on the page, unless
-  // the visitor is already typing somewhere.
+  // the visitor is typing in another field, composing text with an input
+  // method, or something else already handled the key.
   document.addEventListener('keydown', (ev) => {
+    if (ev.defaultPrevented || ev.isComposing || ev.altKey) return
     const target = ev.target as HTMLElement
     const typing =
       target.isContentEditable ||
       ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
-    const slash = ev.key === '/' && !typing && !ev.ctrlKey && !ev.metaKey
-    const k = ev.key.toLowerCase() === 'k' && (ev.ctrlKey || ev.metaKey)
+    if (typing && target !== input) return
+    const modified = ev.ctrlKey || ev.metaKey
+    const slash = ev.key === '/' && !modified && target !== input
+    const k = ev.key.toLowerCase() === 'k' && modified
     if (!slash && !k) return
     ev.preventDefault()
     input.focus()
