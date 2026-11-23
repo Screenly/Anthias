@@ -1335,6 +1335,19 @@ label { text-align: left; }
     background-color: var(--color-surface-tint);
   }
   > textarea.app-input ~ label { z-index: 2; }
+
+  // Size a textarea to its rows rather than the single-line 3.6rem, and
+  // let it grow with its content where field-sizing is supported, so a
+  // pasted value doesn't need to scroll at all. Past max-height, or in
+  // browsers without field-sizing, the mask above still keeps scrolled
+  // text out from under the label.
+  > textarea.app-input {
+    height: auto;
+    min-height: 3.6rem;
+    max-height: 16rem;
+    field-sizing: content;
+    resize: vertical;
+  }
 }
 
 .app-check {
@@ -3728,9 +3741,11 @@ body.auth-body {
 }
 
 // The page a managed screen's web interface shows instead of the app
-// (managed.html), inside the same card as the login page.
+// (managed.html), inside the same card as the login page, centered
+// like the headline and button above it.
 .managed-page__meta {
-  margin: calc(var(--spacing) * 4) 0 0;
+  margin: 0;
+  text-align: center;
   font-size: 0.875rem;
   line-height: 1.6;
   color: var(--color-fg-muted);
@@ -3739,18 +3754,22 @@ body.auth-body {
 }
 
 .managed-page__leave {
-  margin-top: calc(var(--spacing) * 6);
+  margin-top: calc(var(--spacing) * 2);
   padding-top: calc(var(--spacing) * 4);
   border-top: 1px solid var(--color-border);
   font-size: 0.875rem;
   line-height: 1.5;
+  text-align: center;
 
   summary {
     cursor: pointer;
     font-weight: 600;
   }
 
-  p { margin: calc(var(--spacing) * 3) 0; }
+  p {
+    margin: calc(var(--spacing) * 3) 0;
+    color: var(--color-fg-muted);
+  }
 }
 
 // --- Multi-screen UX ------------------------------------------------------
