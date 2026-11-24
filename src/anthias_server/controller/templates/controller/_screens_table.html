@@ -15,10 +15,10 @@
   <section class="surface screens__requests" id="join-requests">
     <header class="surface__header">
       <h2><i class="ti ti-user-question mr-2" aria-hidden="true"></i>Waiting for approval</h2>
-      <span class="surface__count">{{ join_requests|length }}</span>
+      <span class="surface__count">{{ join_requests|length }} waiting</span>
     </header>
     <p class="screens__requests-lede">Check that the code matches the one shown on the screen before you approve it. Requests expire after 24 hours.</p>
-    <table class="asset-table screens-table">
+    <table class="asset-table screens-table screens-table--requests">
       <thead>
         <tr>
           <th scope="col">Screen</th>
@@ -78,7 +78,7 @@
       <h2><i class="ti ti-devices mr-2" aria-hidden="true"></i>Screens</h2>
       <span class="surface__count">{{ online_count }} of {{ node_count }} online{% if attention_count %} · <span class="screens__attention">{{ attention_count }} need{{ attention_count|pluralize:"s," }} attention</span>{% endif %}</span>
     </header>
-    <table class="asset-table screens-table">
+    <table class="asset-table screens-table screens-table--nodes">
       <thead>
         <tr>
           <th scope="col">Screen</th>
@@ -94,7 +94,7 @@
             <div class="muted-label">Controller · the source of every publish</div>
           </td>
           <td><span class="screens__status screens__status--online">Online</span></td>
-          <td class="muted-label">Source</td>
+          <td><span class="screens__publish">Source</span></td>
           <td class="text-right">
             <div class="screens__row-actions">
               <details class="screens__menu" x-data @keydown.escape="if ($el.open) { $el.open = false; $el.querySelector('summary').focus() }" @click.outside="$el.open = false">
