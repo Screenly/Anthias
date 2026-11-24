@@ -82,6 +82,10 @@ body {
   font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
   font-size: 1rem;
   line-height: 1.5;
+  // Plus Jakarta Sans has a 0.17em space (most text faces use about
+  // 0.25em). In small muted text that ran words together: "seen 20
+  // seconds ago" read as one word. This brings it to about 0.25em.
+  word-spacing: 0.08em;
   color: var(--color-on-canvas);
   -webkit-font-smoothing: antialiased;
 }
@@ -2259,6 +2263,21 @@ label { text-align: left; }
 .screens__detail {
   overflow-wrap: anywhere;
 }
+// Disk, memory and uptime wrap between items, never inside one.
+.screens__stat {
+  white-space: nowrap;
+  &:not(:last-child)::after {
+    content: " ·";
+  }
+}
+// The certificate stays visible text (keyboard and touch users can't
+// reach a hover title), but quieter than the address line above it.
+.screens__fp {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  color: var(--color-fg-muted);
+  font-variant-numeric: tabular-nums;
+}
 // The Screens page tables. Headers line up with the text under them
 // (a <th> centres by default), and every cell in a row starts on the
 // same line. Doubled class to outrank `.asset-table tbody td`, which
@@ -2273,8 +2292,8 @@ label { text-align: left; }
 @media (min-width: 641px) {
   .screens-table--nodes {
     th:nth-child(1) { width: 34%; }
-    th:nth-child(2) { width: 26%; }
-    th:nth-child(3) { width: 24%; }
+    th:nth-child(2) { width: 30%; }
+    th:nth-child(3) { width: 20%; }
     th:nth-child(4) { width: 16%; }
   }
   .screens-table--requests {

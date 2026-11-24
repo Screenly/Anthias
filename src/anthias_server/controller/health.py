@@ -161,23 +161,28 @@ def _uptime(hours: Any) -> str:
     if not isinstance(hours, (int, float)):
         return ''
     if hours < 1:
-        return 'up <1 h'
+        return 'Up <1 h'
     if hours < 48:
-        return f'up {round(hours)} h'
-    return f'up {round(hours / 24)} days'
+        return f'Up {round(hours)} h'
+    return f'Up {round(hours / 24)} days'
 
 
 def summary_line(health: dict[str, Any]) -> str:
     """One line for the Screens page: disk, memory, uptime."""
+    return ' · '.join(summary_parts(health))
+
+
+def summary_parts(health: dict[str, Any]) -> list[str]:
+    """Disk, memory and uptime, each a separate item."""
     parts = []
     if health.get('free_space'):
-        parts.append(f'Disk {health["free_space"]} free')
+        parts.append(f'{health["free_space"]} disk free')
     if isinstance(health.get('memory_available_mib'), int):
-        parts.append(f'RAM {_mib(health["memory_available_mib"])} free')
+        parts.append(f'{_mib(health["memory_available_mib"])} RAM free')
     uptime = _uptime(health.get('uptime_hours'))
     if uptime:
         parts.append(uptime)
-    return ' · '.join(parts)
+    return parts
 
 
 def is_fresh(node: Node, now: datetime) -> bool:

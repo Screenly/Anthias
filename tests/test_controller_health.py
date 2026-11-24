@@ -135,10 +135,10 @@ def test_under_voltage_earlier_in_this_boot_is_still_reported() -> None:
 def test_summary_line() -> None:
     reading = health.health_from_info(INFO)
     assert health.summary_line(reading) == (
-        'Disk 17.9 GB free · RAM 217.0\xa0MB free · up 2 days'
+        '17.9 GB disk free · 217.0\xa0MB RAM free · Up 2 days'
     )
-    assert health.summary_line({'uptime_hours': 0.4}) == 'up <1 h'
-    assert health.summary_line({'uptime_hours': 5.6}) == 'up 6 h'
+    assert health.summary_line({'uptime_hours': 0.4}) == 'Up <1 h'
+    assert health.summary_line({'uptime_hours': 5.6}) == 'Up 6 h'
 
 
 class _FakeClient:
@@ -170,7 +170,7 @@ def test_check_node_stores_the_health_reading(
     assert node.health['free_space_bytes'] == int(17.9 * 1024**3)
     assert node.health_at is not None
     assert node.health_fresh
-    assert node.health_summary.startswith('Disk 17.9 GB free')
+    assert node.health_summary.startswith('17.9 GB disk free')
     assert node.health_problems == []
 
 
@@ -183,6 +183,7 @@ def test_stale_or_offline_readings_are_not_shown_or_counted() -> None:
         'Gone', status=NodeStatus.OFFLINE, health=bad, health_at=now
     )
     assert stale.health_problems == [] and stale.health_summary == ''
+    assert stale.health_parts == []
     assert offline.health_problems == []
     summary = health.cluster_summary([stale, offline], now)
     assert summary['screens_with_health'] == 0
@@ -250,7 +251,8 @@ def test_screens_page_shows_health_and_warnings(
 
     body = client.get(reverse('controller:screens_table')).content.decode()
 
-    assert 'Disk 17.9 GB free · RAM 217.0\xa0MB free · up 2 days' in body
+    for part in ('17.9 GB disk free', '217.0\xa0MB RAM free', 'Up 2 days'):
+        assert f'<span class="screens__stat">{part}</span>' in body
     assert 'Low disk space: 300.0 MB free' in body
     assert '1 needs attention' in body
 
@@ -291,3 +293,21 @@ def test_health_stays_fresh_between_two_readings() -> None:
     )
     # Still well short of an hour: a quiet screen stops counting soon.
     assert max_age <= 30 * 60
+
+
+@pytest.mark.parametrize(
+    ('model', 'label'),
+    [
+        ('Raspberry Pi 4 Model B Rev 1.5', 'Raspberry Pi 4'),
+        ('Raspberry Pi 5 Model B Rev 1.0', 'Raspberry Pi 5'),
+        ('Raspberry Pi 3 Model B Plus Rev 1.3', 'Raspberry Pi 3 Model B Plus'),
+        ('Raspberry Pi 2 Model B', 'Raspberry Pi 2'),
+        ('Generic x86_64 Device', 'Generic x86_64 Device'),
+        ('', ''),
+    ],
+)
+def test_short_model(model: str, label: str) -> None:
+    """The Screens page shows the board, not its revision."""
+    from anthias_server.controller.models import short_model
+
+    assert short_model(model) == label
