@@ -75,6 +75,10 @@ The dashboard runs on the device itself, on your network. There is no app to ins
 - **Remote restart and shutdown**, which matters once your screens are scattered around a building.
 - **Screen rotation** for portrait installs, and a **display schedule** that switches the screen off outside opening hours. See the [display schedule documentation](/docs/display-schedule/).
 
+{{< screenshot name="home"
+    alt="The Anthias dashboard: the schedule overview listing each asset with its schedule window, duration and an Enabled toggle"
+    caption="The dashboard, served by the screen itself." >}}
+
 The dashboard is served over HTTPS from the first boot, using the screen's own self-signed certificate. You can swap in your own certificate from Settings, or a free auto-renewing one for your own domain. If the screen is somewhere public, turn on username and password protection too; until you do, every page carries a warning.
 
 ## Bringing content with you
@@ -88,6 +92,10 @@ A single backup file holds your settings and assets, so you can restore it later
 Several screens means several Pis, but you can manage them from one. With [multi-screen management](/docs/multi-screen/), one device is the controller: you change tomorrow's playlist there and publish it to every screen on your network, and the controller shows which screens are online and healthy. For the controller, use a Raspberry Pi 4 with at least 2 GB of RAM, a Pi 5 or a PC; the screens can be any supported board.
 
 A fleet can also be deployed and updated over the air through [Balena](/docs/balena/), and the backup file lets you clone a configured device onto the next one. For a shop, a building or a floor that works well. Every managed screen shows the same playlist, though, and the controller has to be on the same network. For different content per screen or a large multi-site estate managed centrally, it is the wrong tool.
+
+{{< screenshot name="screens"
+    alt="A controller's Screens page: a screen waiting for approval, and the managed screens with their status, health and last publish"
+    caption="One controller, every screen's status on one page." >}}
 
 ## Automating it
 

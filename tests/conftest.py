@@ -153,6 +153,11 @@ def marketing_screenshot(request: pytest.FixtureRequest) -> MarketingShotFn:
     _MARKETING_OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     def _capture(name: str, *, full_page: bool = False) -> None:
+        # Most of the suite runs with authentication off, so every page
+        # carries the "Anyone on your network can change this screen"
+        # banner. A real install shown in marketing would have it on,
+        # so drop the banner (and the space it takes) before capturing.
+        page.evaluate("document.getElementById('auth-warning')?.remove()")
         png_bytes = page.screenshot(full_page=full_page)
 
         # Write the 3× original verbatim — re-encoding through PIL
