@@ -85,6 +85,10 @@ Each screen is its own Pi, but you don't have to update them one by one. With [m
 
 Every screen managed this way shows the same loop, and the controller has to be on the same network as its screens. For a window bank or a single shop that fits well. Different content on different screens, several sites, or remote management over the internet is what [Screenly](https://www.screenly.io) is for.
 
+{{< screenshot name="screens"
+    alt="A controller's Screens page: a screen waiting for approval, and the managed screens with their status, health and last publish"
+    caption="One controller, every screen's status on one page." >}}
+
 ## Getting started
 
 Flash a Raspberry Pi with a pre-built Anthias image using Raspberry Pi Imager, run the one-line installer on an existing system, or deploy from balenaHub. See [Get Started](/get-started/) for the full walkthrough, or the [installation options](/docs/install/) for every route. For the wider picture, see [Raspberry Pi digital signage](/raspberry-pi-digital-signage/) and [free digital signage software](/free-digital-signage-software/).

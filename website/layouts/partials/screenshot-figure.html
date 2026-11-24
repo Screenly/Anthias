@@ -1,0 +1,51 @@
+{{- /* A product screenshot from the marketing-screenshots capture set,
+       as a responsive WebP/PNG <figure>.
+
+       Context: dict with
+         name     capture name, resolving assets/images/screenshots/<name>@3x.png
+         alt      required alt text
+         caption  optional, markdown
+         class    optional extra classes on the <figure>
+         sizes    optional <img sizes>; defaults to the docs column width
+
+       The directory is gitignored and filled at deploy time (see
+       deploy-website.yaml, or `bun run screenshots:fetch` locally). A
+       capture missing at build time renders nothing, so a partial
+       artifact or a local build without captures still produces a
+       working page instead of a broken image. Shared by the
+       `screenshot` shortcode (docs and landing pages) and by layouts
+       such as features.html. */ -}}
+{{- $name := .name -}}
+{{- $alt := .alt -}}
+{{- if not $name -}}{{- errorf "screenshot-figure needs a name" -}}{{- end -}}
+{{- if not $alt -}}{{- errorf "screenshot %q needs alt text" $name -}}{{- end -}}
+{{- $sizes := .sizes | default "(min-width: 56rem) 56rem, 100vw" -}}
+{{- $caption := .caption -}}
+{{- $class := .class -}}
+{{- with resources.Get (printf "images/screenshots/%s@3x.png" $name) -}}
+  {{- $src := . -}}
+  {{- $webps := slice -}}
+  {{- $pngs := slice -}}
+  {{- $fallback := false -}}
+  {{- range slice 480 960 1440 2160 -}}
+    {{- if le . $src.Width -}}
+      {{- $webp := $src.Resize (printf "%dx webp q82" .) -}}
+      {{- $png := $src.Resize (printf "%dx q90" .) -}}
+      {{- $webps = $webps | append (printf "%s %dw" $webp.RelPermalink .) -}}
+      {{- $pngs = $pngs | append (printf "%s %dw" $png.RelPermalink .) -}}
+      {{- if eq . 960 -}}{{- $fallback = $png -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $fallback -}}
+    {{- $fallback = $src.Resize (printf "%dx q90" $src.Width) -}}
+  {{- end -}}
+<figure class="product-screenshot{{ with $class }} {{ . }}{{ end }}" data-md-skip>
+  <picture>
+    <source type="image/webp" srcset="{{ delimit $webps ", " }}" sizes="{{ $sizes }}">
+    <img src="{{ $fallback.RelPermalink }}" srcset="{{ delimit $pngs ", " }}" sizes="{{ $sizes }}" alt="{{ $alt }}" width="{{ $fallback.Width }}" height="{{ $fallback.Height }}" loading="lazy" decoding="async">
+  </picture>
+  {{- with $caption }}
+  <figcaption>{{ . | markdownify }}</figcaption>
+  {{- end }}
+</figure>
+{{- end -}}

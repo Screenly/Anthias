@@ -37,7 +37,7 @@ The fetch script needs the `gh` CLI authenticated; it targets `Screenly/Anthias`
 
 ### Screenshots in docs pages
 
-Docs pages embed the same captures with the `screenshot` shortcode:
+Docs and landing pages embed the same captures with the `screenshot` shortcode, and layouts such as `features.html` use `partials/screenshot-figure.html` directly:
 
 ```markdown
 {{</* screenshot name="screens" alt="…" caption="…" */>}}
