@@ -35,6 +35,16 @@ bun run dev
 
 The fetch script needs the `gh` CLI authenticated; it targets `Screenly/Anthias` by default so the upstream artifact is reachable even from a fork clone. Pass `--ref <branch>` to pull from a different branch's most recent run, or `--repo <owner>/<repo>` to point at a different repo. Without screenshots, Hugo still builds — the slider section simply omits.
 
+### Screenshots in docs pages
+
+Docs pages embed the same captures with the `screenshot` shortcode:
+
+```markdown
+{{</* screenshot name="screens" alt="…" caption="…" */>}}
+```
+
+`name` is a capture under `assets/images/screenshots/` (without `@3x.png`); `alt` is required. A capture that is missing at build time renders nothing, so local builds without `screenshots:fetch` still work. New captures come from a `marketing_screenshot('<name>')` call in a Playwright integration test (see `tests/test_multi_screen_ui.py`).
+
 ## Build
 
 ```bash

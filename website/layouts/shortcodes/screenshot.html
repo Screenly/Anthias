@@ -1,0 +1,47 @@
+{{- /* A product screenshot from the marketing-screenshots capture set.
+
+       Usage: {{< screenshot name="screens" alt="…" caption="…" >}}
+
+       Resolves assets/images/screenshots/<name>@3x.png, the same
+       gitignored directory the home-page slider reads (filled by
+       deploy-website.yaml, or `bun run screenshots:fetch` locally).
+       A capture missing at build time renders nothing, so a partial
+       artifact or a local build without captures still produces a
+       working page instead of a broken image. */ -}}
+{{- $name := .Get "name" -}}
+{{- $alt := .Get "alt" -}}
+{{- $caption := .Get "caption" -}}
+{{- if not $name -}}
+  {{- errorf "screenshot shortcode needs a name (%s)" .Position -}}
+{{- end -}}
+{{- if not $alt -}}
+  {{- errorf "screenshot %q needs alt text (%s)" $name .Position -}}
+{{- end -}}
+{{- with resources.Get (printf "images/screenshots/%s@3x.png" $name) -}}
+  {{- $src := . -}}
+  {{- $webps := slice -}}
+  {{- $pngs := slice -}}
+  {{- $fallback := false -}}
+  {{- range slice 480 960 1440 2160 -}}
+    {{- if le . $src.Width -}}
+      {{- $webp := $src.Resize (printf "%dx webp q82" .) -}}
+      {{- $png := $src.Resize (printf "%dx q90" .) -}}
+      {{- $webps = $webps | append (printf "%s %dw" $webp.RelPermalink .) -}}
+      {{- $pngs = $pngs | append (printf "%s %dw" $png.RelPermalink .) -}}
+      {{- if eq . 960 -}}{{- $fallback = $png -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $fallback -}}
+    {{- $fallback = $src.Resize (printf "%dx q90" $src.Width) -}}
+  {{- end -}}
+  {{- $sizes := "(min-width: 56rem) 56rem, 100vw" -}}
+<figure class="docs-screenshot" data-md-skip>
+  <picture>
+    <source type="image/webp" srcset="{{ delimit $webps ", " }}" sizes="{{ $sizes }}">
+    <img src="{{ $fallback.RelPermalink }}" srcset="{{ delimit $pngs ", " }}" sizes="{{ $sizes }}" alt="{{ $alt }}" width="{{ $fallback.Width }}" height="{{ $fallback.Height }}" loading="lazy" decoding="async">
+  </picture>
+  {{- with $caption }}
+  <figcaption>{{ . | markdownify }}</figcaption>
+  {{- end }}
+</figure>
+{{- end -}}
