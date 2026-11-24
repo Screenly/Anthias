@@ -15,10 +15,10 @@
   <section class="surface screens__requests" id="join-requests">
     <header class="surface__header">
       <h2><i class="ti ti-user-question mr-2" aria-hidden="true"></i>Waiting for approval</h2>
-      <span class="surface__count">{{ join_requests|length }}</span>
+      <span class="surface__count">{{ join_requests|length }} waiting</span>
     </header>
     <p class="screens__requests-lede">Check that the code matches the one shown on the screen before you approve it. Requests expire after 24 hours.</p>
-    <table class="asset-table screens-table">
+    <table class="asset-table screens-table screens-table--requests">
       <thead>
         <tr>
           <th scope="col">Screen</th>
@@ -33,7 +33,7 @@
           <td>
             <strong>{{ pending.name }}</strong>
             <div class="muted-label">
-              {{ pending.host }}{% if pending.device_model %} · {{ pending.device_model }}{% endif %}{% if pending.version %} · {{ pending.version }}{% endif %}
+              {{ pending.host }}{% if pending.device_model %} · <span title="{{ pending.device_model }}">{{ pending.model_label }}</span>{% endif %}{% if pending.version %} · {{ pending.version }}{% endif %}
             </div>
           </td>
           <td><span class="screens__check-code">{{ pending.check_code }}</span></td>
@@ -78,7 +78,7 @@
       <h2><i class="ti ti-devices mr-2" aria-hidden="true"></i>Screens</h2>
       <span class="surface__count">{{ online_count }} of {{ node_count }} online{% if attention_count %} · <span class="screens__attention">{{ attention_count }} need{{ attention_count|pluralize:"s," }} attention</span>{% endif %}</span>
     </header>
-    <table class="asset-table screens-table">
+    <table class="asset-table screens-table screens-table--nodes">
       <thead>
         <tr>
           <th scope="col">Screen</th>
@@ -94,7 +94,7 @@
             <div class="muted-label">Controller · the source of every publish</div>
           </td>
           <td><span class="screens__status screens__status--online">Online</span></td>
-          <td class="muted-label">Source</td>
+          <td><span class="screens__publish">Source</span></td>
           <td class="text-right">
             <div class="screens__row-actions">
               <details class="screens__menu" x-data @keydown.escape="if ($el.open) { $el.open = false; $el.querySelector('summary').focus() }" @click.outside="$el.open = false">
@@ -121,29 +121,26 @@
           <td>
             <strong>{{ node.name }}</strong>
             <div class="muted-label">
-              {{ node.host }}{% if node.port != management_port %}:{{ node.port }}{% endif %}{% if node.device_model %} · {{ node.device_model }}{% endif %}{% if node.version %} · {{ node.version }}{% endif %}
+              {{ node.host }}{% if node.port != management_port %}:{{ node.port }}{% endif %}{% if node.device_model %} · <span title="{{ node.device_model }}">{{ node.model_label }}</span>{% endif %}{% if node.version %} · {{ node.version }}{% endif %}
             </div>
-            <div class="muted-label screens__fp" title="{{ node.fingerprint }}">Certificate {{ node.fingerprint|slice:":16" }}…</div>
+            <div class="screens__fp" title="{{ node.fingerprint }}">Certificate {{ node.fingerprint|slice:":16" }}…</div>
           </td>
           <td>
             <span class="screens__status screens__status--{{ node.status }}">{{ node.get_status_display }}</span>
-            <div class="muted-label">
-              {% if node.last_seen_at %}seen {{ node.last_seen_at|naturaltime }}{% else %}not seen yet{% endif %}
-            </div>
-            {% if node.health_summary %}
-            <div class="muted-label screens__health">{{ node.health_summary }}</div>
+            {% if node.status == 'online' %}
+              {% if node.health_parts %}<div class="muted-label screens__health">{% for part in node.health_parts %}<span class="screens__stat">{{ part }}</span> {% endfor %}</div>{% endif %}
+            {% else %}
+              <div class="muted-label">{% if node.last_seen_at %}Last seen {{ node.last_seen_at|naturaltime }}{% else %}Never connected{% endif %}</div>
+              {% if node.status_detail %}<div class="muted-label screens__detail">{{ node.status_detail|truncatechars:160 }}</div>{% endif %}
             {% endif %}
             {% for label in node.health_problems %}
             <span class="screens__warn" role="status"><i class="ti ti-alert-triangle" aria-hidden="true"></i>{{ label }}</span>
             {% endfor %}
-            {% if node.status != 'online' and node.status_detail %}
-            <div class="muted-label screens__detail">{{ node.status_detail|truncatechars:160 }}</div>
-            {% endif %}
           </td>
           <td>
-            <span class="screens__publish screens__publish--{{ node.publish_state|default:'never' }}">{{ node.get_publish_state_display }}</span>
-            {% if node.published_at %}<div class="muted-label">{{ node.published_at|naturaltime }}</div>{% endif %}
-            {% if node.publish_detail %}<div class="muted-label screens__detail">{{ node.publish_detail|truncatechars:240 }}</div>{% endif %}
+            <span class="screens__publish screens__publish--{{ node.publish_state|default:'never' }}"{% if node.publish_detail %} title="{{ node.publish_detail }}"{% endif %}>{{ node.get_publish_state_display }}</span>
+            {% if node.published_at %}<div class="muted-label">{{ node.published_at|naturaltime|capfirst }}</div>{% endif %}
+            {% if node.publish_state == 'failed' and node.publish_detail %}<div class="muted-label screens__detail">{{ node.publish_detail|truncatechars:240 }}</div>{% endif %}
           </td>
           <td class="text-right">
             <div class="screens__row-actions">

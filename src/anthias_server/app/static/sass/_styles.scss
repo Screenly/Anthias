@@ -82,6 +82,10 @@ body {
   font-family: "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
   font-size: 1rem;
   line-height: 1.5;
+  // Plus Jakarta Sans has a 0.17em space (most text faces use about
+  // 0.25em). In small muted text that ran words together: "seen 20
+  // seconds ago" read as one word. This brings it to about 0.25em.
+  word-spacing: 0.08em;
   color: var(--color-on-canvas);
   -webkit-font-smoothing: antialiased;
 }
@@ -2259,9 +2263,52 @@ label { text-align: left; }
 .screens__detail {
   overflow-wrap: anywhere;
 }
-.screens-table {
-  td { vertical-align: top; }
-  td:nth-child(3) { min-width: 12rem; }
+// Disk, memory and uptime wrap between items, never inside one.
+.screens__stat {
+  white-space: nowrap;
+  &:not(:last-child)::after {
+    content: " ·";
+  }
+}
+// The certificate stays visible text (keyboard and touch users can't
+// reach a hover title), but quieter than the address line above it.
+.screens__fp {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  color: var(--color-fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+// The Screens page tables. Headers line up with the text under them
+// (a <th> centres by default), and every cell in a row starts on the
+// same line. Doubled class to outrank `.asset-table tbody td`, which
+// centres vertically.
+.asset-table.screens-table {
+  thead th { text-align: left; }
+  thead th.text-right { text-align: right; }
+  tbody td { vertical-align: top; }
+}
+// Fixed layout splits columns evenly unless told otherwise, which
+// starved the Screen column and left Actions mostly empty.
+@media (min-width: 641px) {
+  .screens-table--nodes {
+    th:nth-child(1) { width: 34%; }
+    th:nth-child(2) { width: 30%; }
+    th:nth-child(3) { width: 20%; }
+    th:nth-child(4) { width: 16%; }
+  }
+  .screens-table--requests {
+    th:nth-child(1) { width: 38%; }
+    th:nth-child(2) { width: 24%; }
+    th:nth-child(3) { width: 18%; }
+    th:nth-child(4) { width: 20%; }
+  }
+  // Outer cells sit on the card's padding, so the cell text, the card
+  // title and lede, and the Publish and Join cards below all share one
+  // left (and right) edge.
+  .asset-table.screens-table {
+    th:first-child, td:first-child { padding-left: 0; }
+    th:last-child, td:last-child { padding-right: 0; }
+  }
 }
 .screens__status,
 .screens__publish,
@@ -3854,7 +3901,7 @@ body.auth-body {
 // Screens page.
 .screens__requests-lede {
   margin: 0;
-  padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 2);
+  padding: 0 0 calc(var(--spacing) * 2);
   font-size: 0.875rem;
   color: var(--color-fg-muted);
 }
@@ -3963,7 +4010,7 @@ body.auth-body {
 .screens-activity {
   list-style: none;
   margin: 0;
-  padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 2);
+  padding: 0 0 calc(var(--spacing) * 2);
 }
 .screens-activity__item {
   display: flex;
@@ -3980,7 +4027,7 @@ body.auth-body {
   margin: 0.25rem 0 0;
   overflow-wrap: anywhere;
 }
-.screens-activity__empty { padding: calc(var(--spacing) * 4); margin: 0; }
+.screens-activity__empty { padding: calc(var(--spacing) * 3) 0; margin: 0; }
 @media (max-width: 640px) {
   .screens-activity__item {
     flex-direction: column;

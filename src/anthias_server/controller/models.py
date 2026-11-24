@@ -1,7 +1,23 @@
+import re
+
 from django.db import models
 from django.utils import timezone
 
 DEFAULT_NODE_PORT = 8443
+
+_PI_REVISION = re.compile(r'(?: Model B)?(?: Rev [0-9.]+)?$')
+
+
+def short_model(model: str) -> str:
+    """A device model short enough for a table cell.
+
+    The Pi firmware names a board ``Raspberry Pi 4 Model B Rev 1.5``;
+    the revision and the default ``Model B`` add nothing an operator
+    picks a screen by. Other names are returned unchanged.
+    """
+    if model.startswith('Raspberry Pi'):
+        return _PI_REVISION.sub('', model)
+    return model
 
 
 class NodeStatus(models.TextChoices):
@@ -103,6 +119,10 @@ class Node(models.Model):
         return f'{self.name} ({self.host})'
 
     @property
+    def model_label(self) -> str:
+        return short_model(self.device_model)
+
+    @property
     def push_live(self) -> bool:
         from .push import is_live
 
@@ -127,6 +147,12 @@ class Node(models.Model):
         from .health import summary_line
 
         return summary_line(self.health) if self.health_fresh else ''
+
+    @property
+    def health_parts(self) -> list[str]:
+        from .health import summary_parts
+
+        return summary_parts(self.health) if self.health_fresh else []
 
     @property
     def base_url(self) -> str:
@@ -249,6 +275,10 @@ class JoinRequest(models.Model):
 
     def __str__(self) -> str:
         return f'{self.name} ({self.host}), waiting for approval'
+
+    @property
+    def model_label(self) -> str:
+        return short_model(self.device_model)
 
     @property
     def base_url(self) -> str:
