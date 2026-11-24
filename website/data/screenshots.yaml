@@ -19,6 +19,9 @@ slides:
   - name: add-asset
     alt: "Add Asset dialog with URL, file upload, and schedule fields"
     caption: "Upload media or point at any URL"
+  - name: screens
+    alt: "Screens page of a controller: a screen waiting for approval and the managed screens with status and health"
+    caption: "Run every screen on your network from one"
   - name: settings
     alt: "Anthias system settings, display, network, and player options"
     caption: "Configure the player without touching the CLI"

@@ -125,6 +125,10 @@ correct local time, or run `timedatectl` on it: it should report
    contains the controller's address, the fingerprint of its
    certificate, and a secret. Click **Copy**.
 
+{{< screenshot name="screens-join"
+    alt="A new controller's Screens page: the steps to add the first screen, and the join information with Copy and Regenerate buttons"
+    caption="A new controller's **Screens** page, before any screen has joined." >}}
+
 Later, the same section shows **This screen is a controller**, with a
 link to **Screens** and **Turn off controller mode**. Turning
 authentication off also turns controller mode off.
@@ -150,15 +154,27 @@ addresses, or on Anthias's own internal service names.
    enter the screen's IP address or DNS name.
 4. Click **Join controller**.
 
+{{< screenshot name="multi-screen-settings"
+    alt="Settings, Multi-screen management: a field to paste the join information with a Join controller button, next to a Make this a controller button"
+    caption="**Settings → Multi-screen management** on a screen that is not managed yet." >}}
+
 The screen now shows **Waiting for approval** with a short **check
 code**, such as `K7QX-4MRA-2ZTD`. Nothing is trusted yet: the request only
 appears on the controller.
+
+{{< screenshot name="multi-screen-waiting"
+    alt="Settings on a screen waiting for approval: the check code K7QX-4MRA-2ZTD and a Cancel request button"
+    caption="The screen waits for approval and shows its check code." >}}
 
 5. On the controller's **Screens** page, the screen is listed under
    **Waiting for approval** with its name, address, model and check
    code. Make sure the check code matches the one on the screen, then
    click **Approve**. If you don't recognize the request, click
    **Reject**.
+
+{{< screenshot name="screens"
+    alt="The controller's Screens page: a request waiting for approval with its check code and Approve and Reject buttons, above the list of screens with their status, health and last publish"
+    caption="The controller's **Screens** page: a request waiting for approval above the managed screens." >}}
 
 Once approved, the screen appears on the controller's **Screens** page
 as **Online**, and its own web interface turns off (see below). A request that nobody approves expires after 24 hours; the
@@ -174,6 +190,10 @@ of the usual interface, and its local API answers with an error. Port
 If the controller is gone, for example it was replaced and its screens
 can't reach it, sign in on that page and use **Leave management** to
 take the screen back. Its web interface comes back at once.
+
+{{< screenshot name="managed"
+    alt="A managed screen's own address: Managed by Initech HQ, a link to open the controller, and a sign-in form for taking the screen back"
+    caption="What a managed screen's own address shows." >}}
 
 ## Publish and control
 
@@ -201,6 +221,10 @@ From there:
 * **Check now** refreshes the status of every screen immediately.
 * **Remove** a screen, from its **⋯** menu. Its access token is revoked on the screen, and
   it keeps playing what it already has.
+
+{{< screenshot name="screens-publish"
+    alt="The Publish section with Publish to all screens, the Control all screens buttons and Reboot all, followed by the Activity list of joins, publishes and commands"
+    caption="**Publish**, **Control all screens** and **Activity** on the **Screens** page." >}}
 
 The **Activity** list records every join, publish and command, and who
 did it.
