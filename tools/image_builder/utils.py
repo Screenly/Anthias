@@ -229,6 +229,13 @@ def get_viewer_context(board: str, target_platform: str) -> dict[str, Any]:
         # and at 11 MB installed it is smaller than either CJK font
         # already in this list.
         'fonts-noto-color-emoji',
+        # Non-Latin, non-CJK scripts for web assets. Without it every
+        # Indic script (Malayalam, Devanagari, Tamil, Telugu, Kannada,
+        # Bengali, …) plus Sinhala, Thai, Khmer, Myanmar, Ethiopic and
+        # others rendered as hex boxes — e.g. a page localizing its date
+        # to hi-IN showed only tofu. Architecture: all; 12 MB download,
+        # 43 MB installed.
+        'fonts-noto-core',
         'libasound2-dev',
         'libavcodec-dev',
         'libavdevice-dev',
