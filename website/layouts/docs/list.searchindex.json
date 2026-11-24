@@ -1,0 +1,43 @@
+{{- /* Search index for the docs search box (assets/js/docs-search.ts).
+
+       One record per section of a page, split at its h2/h3 headings, so
+       a result links straight to the part of the page that matched. The
+       FAQ answers are added too, since they are often the quickest
+       reference. Fields are short to keep the file small:
+
+         p  page title
+         h  section heading ("" for the text before the first heading)
+         u  URL, with the heading's anchor
+         x  section text, plain */ -}}
+{{- $records := slice -}}
+{{- $split := "\x1e" -}}
+{{- range slice . | append .RegularPagesRecursive -}}
+  {{- $page := . -}}
+  {{- $html := replaceRE `<h([23]) id="` (printf `%s<h${1} id="` $split) .Content -}}
+  {{- range $i, $chunk := split $html $split -}}
+    {{- $heading := "" -}}
+    {{- $url := $page.RelPermalink -}}
+    {{- $body := $chunk -}}
+    {{- with findRESubmatch `^<h[23] id="([^"]+)"[^>]*>([\s\S]*?)</h[23]>` $chunk 1 -}}
+      {{- $m := index . 0 -}}
+      {{- $url = printf "%s#%s" $page.RelPermalink (index $m 1) -}}
+      {{- $heading = index $m 2 | plainify | htmlUnescape | strings.TrimSpace -}}
+      {{- $body = strings.TrimPrefix (index $m 0) $chunk -}}
+    {{- end -}}
+    {{- $text := replaceRE `\s+` " " ($body | plainify | htmlUnescape) | strings.TrimSpace -}}
+    {{- if or $heading $text -}}
+      {{- $records = $records | append (dict "p" $page.Title "h" $heading "u" $url "x" $text) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- with site.GetPage "/faq" -}}
+  {{- $faq := . -}}
+  {{- range hugo.Data.faq -}}
+    {{- range .items -}}
+      {{- $text := replaceRE `\s+` " " (.answer | markdownify | plainify | htmlUnescape) | strings.TrimSpace -}}
+      {{- $url := printf "%s#%s" $faq.RelPermalink (.question | anchorize) -}}
+      {{- $records = $records | append (dict "p" "FAQ" "h" .question "u" $url "x" $text) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $records | jsonify -}}

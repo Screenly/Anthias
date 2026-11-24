@@ -28,6 +28,8 @@ const ICONS: ReadonlyArray<{ name: string; pack: 'brands' | 'solid' }> = [
   { name: 'markdown', pack: 'brands' },
   { name: 'claude', pack: 'brands' },
   { name: 'openai', pack: 'brands' },
+  // Docs search (layouts/partials/docs-search.html).
+  { name: 'magnifying-glass', pack: 'solid' },
 ]
 
 const SRC = 'node_modules/@fortawesome/fontawesome-free/svgs'

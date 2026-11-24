@@ -179,6 +179,14 @@
     <script defer src="{{ $tools.RelPermalink }}" integrity="{{ $tools.Data.Integrity }}"></script>
     {{- end }}
 
+    {{- /* Docs search (partials/docs-search.html), on /docs/ and every
+           docs page. */ -}}
+    {{- if eq (string .Section) "docs" -}}
+      {{- $searchOpts := dict "targetPath" "js/docs-search.js" "minify" true "target" "es2020" -}}
+      {{- $search := resources.Get "js/docs-search.ts" | js.Build $searchOpts | fingerprint -}}
+    <script defer src="{{ $search.RelPermalink }}" integrity="{{ $search.Data.Integrity }}"></script>
+    {{- end }}
+
     {{- /* Article structured data on individual docs pages */ -}}
     {{ if and .IsPage (eq (string .Section) "docs") }}
     <script type="application/ld+json">

@@ -1,0 +1,32 @@
+{{- /* Search box for the docs, shown in the dark header of /docs/ and
+       every docs page. assets/js/docs-search.ts fetches the index
+       (layouts/docs/list.searchindex.json) the first time the box is
+       used and searches it in the browser. data-md-skip keeps it out
+       of the page's Markdown copy.
+
+       Usage: {{ partial "docs-search.html" . }} */ -}}
+{{- $index := "" -}}
+{{- with site.GetPage "/docs" -}}
+  {{- with .OutputFormats.Get "searchindex" -}}{{- $index = .RelPermalink -}}{{- end -}}
+{{- end -}}
+{{- if $index }}
+<div class="docs-search relative mt-6 max-w-xl" data-docs-search data-index="{{ $index }}" data-md-skip>
+    <label for="docs-search-input" class="sr-only">Search the documentation</label>
+    <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/50">{{ partial "icon.html" (dict "name" "magnifying-glass" "size" "0.95rem" "class" "block") }}</span>
+    <input
+        id="docs-search-input"
+        type="search"
+        placeholder="Search the docs"
+        autocomplete="off"
+        spellcheck="false"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded="false"
+        aria-controls="docs-search-results"
+        class="w-full rounded-full bg-white/10 hover:bg-white/15 focus:bg-white/15 border border-white/15 text-white placeholder:text-white/50 text-sm py-2.5 pl-11 pr-14 transition"
+    >
+    <kbd class="docs-search-kbd pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[0.7rem] font-sans text-white/50 border border-white/20 rounded px-1.5 py-0.5" aria-hidden="true">/</kbd>
+    <ul id="docs-search-results" role="listbox" aria-label="Search results" class="docs-search-results hidden"></ul> <!-- NOSONAR: WAI-ARIA combobox pattern; a datalist cannot show the headings and excerpts in each result -->
+    <span class="sr-only" aria-live="polite" data-search-status></span>
+</div>
+{{- end }}

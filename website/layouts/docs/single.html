@@ -4,6 +4,7 @@
         <a href="/docs/" data-md-skip class="text-white/60 text-sm hover:text-white transition">← Documentation</a>
         <h1 class="text-white text-3xl md:text-4xl font-extrabold tracking-tight mt-3">{{ .Title }}</h1>
         {{ with .Description }}<p class="text-white/60 text-base mt-3 max-w-2xl">{{ . }}</p>{{ end }}
+        {{ partial "docs-search.html" . }}
         {{ partial "page-tools.html" . }}
     </div>
 </header>

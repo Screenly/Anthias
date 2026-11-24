@@ -1,6 +1,7 @@
 ---
 title: "Documentation"
 description: "Anthias documentation: installation, deployment, development, and operations."
+outputs: [html, searchindex]
 ---
 
 ## How to get logs from Anthias
