@@ -9,6 +9,7 @@ import tarfile
 import tempfile
 import threading
 import time
+import urllib.parse
 import uuid
 from collections.abc import AsyncGenerator, Generator
 from concurrent.futures import ThreadPoolExecutor
@@ -85,6 +86,12 @@ _CONFIG_SUBTREES = ('backups',)
 # has to outlast a writer mid-transaction. Past that the archive falls
 # back to the file as it sits on disk.
 _SNAPSHOT_TIMEOUT_S = 10.0
+
+# How long a restore waits for the live database's write lock before it
+# gives up. Restoring goes through SQLite (see
+# ``_restore_database_online``), so it only has to outlast a writer
+# mid-transaction; the viewer has been told to stop by then.
+_RESTORE_TIMEOUT_S = 30.0
 
 
 def _db_paths(home: str) -> list[str]:
@@ -789,6 +796,113 @@ def _is_asset_member(name: str) -> bool:
     return len(parts) > 1 and parts[0] in _ASSET_DIRS
 
 
+class _RestoreTimeout(Exception):
+    """The live database stayed locked past ``_RESTORE_TIMEOUT_S``."""
+
+
+def _restore_database_online(
+    tar: tarfile.TarFile,
+    member: tarfile.TarInfo,
+    home: str,
+    extract_kwargs: dict[str, Any],
+) -> bool:
+    """Copy an archived database into the live one through SQLite.
+
+    Returns False, having written nothing, when there is no live
+    database to restore into (or the file there is not one); the caller
+    then extracts the member as a plain file, which is safe because no
+    connection can be open on a database that does not exist.
+
+    Writing the archived file over the live one is not safe while it
+    is open. The server keeps one SQLite connection per worker thread,
+    and Celery and the viewer keep their own, each with the old
+    ``-shm`` mapped. Overwriting the main file and deleting its
+    sidecars under them leaves those handles on a write-ahead-log index
+    that no longer exists: the next write on the restored database
+    makes a new one, and every other connection then fails with
+    ``disk I/O error`` until it happens to be dropped. On a device that
+    meant the web interface answering 500 for up to half a minute after
+    a restore that had reported success.
+
+    The online-backup API instead writes the archived pages into the
+    live database as one ordinary write transaction, through its own
+    WAL. Every open connection sees the restored contents on its next
+    read and nothing has to be deleted, so the old log can never be
+    replayed into the new file either. The database also stays in the
+    journal mode it was in, whatever mode the archived copy used.
+    """
+    target = path.realpath(path.join(home, member.name))
+    root = path.realpath(home)
+    if not target.startswith(root + os.sep):
+        raise BackupRecoverError(
+            f'Refusing to restore {member.name!r} outside {home!r}.'
+        )
+    if not path.isfile(target) or not _is_sqlite_database(target):
+        return False
+
+    # Stage the archived copy beside the live file, under a name no
+    # database lookup will ever open, and read it from there.
+    directory = path.dirname(member.name)
+    staged_name = f'{directory}/.restore-{uuid.uuid4().hex}.tmp'
+    staged_path = path.realpath(path.join(root, staged_name))
+    if not staged_path.startswith(root + os.sep):
+        raise BackupRecoverError(
+            f'Refusing to restore {member.name!r} outside {home!r}.'
+        )
+    try:
+        tar.extract(
+            member.replace(name=staged_name, deep=False), **extract_kwargs
+        )
+        if not _is_sqlite_database(staged_path):
+            raise BackupRecoverError(
+                f'{member.name!r} in the backup is not a database.'
+            )
+        # immutable=1: a read with no locking and no sidecars, so a
+        # staged copy in WAL mode does not grow a -wal / -shm of its own.
+        src = sqlite3.connect(
+            f'file:{urllib.parse.quote(staged_path)}?immutable=1', uri=True
+        )
+        try:
+            dst = sqlite3.connect(target, timeout=_RESTORE_TIMEOUT_S)
+            try:
+                deadline = time.monotonic() + _RESTORE_TIMEOUT_S
+
+                def give_up_when_late(
+                    status: int, remaining: int, total: int
+                ) -> None:
+                    # ``Connection.backup()`` retries SQLITE_BUSY with no
+                    # limit; raising here is the only way to bound it,
+                    # and the destination is left untouched when it does.
+                    if time.monotonic() > deadline:
+                        raise _RestoreTimeout(target)
+
+                src.backup(dst, progress=give_up_when_late)
+            finally:
+                dst.close()
+        finally:
+            src.close()
+    except _RestoreTimeout:
+        raise BackupRecoverError(
+            f'The database stayed locked for {_RESTORE_TIMEOUT_S:.0f}s; '
+            'nothing was restored into it.'
+        ) from None
+    finally:
+        try:
+            remove(staged_path)
+        except FileNotFoundError:
+            pass
+    return True
+
+
+def _is_sqlite_database(file_path: str) -> bool:
+    """True if ``file_path`` starts with the SQLite 3 header."""
+    try:
+        with open(file_path, 'rb') as f:
+            return f.read(16) == b'SQLite format 3\x00'
+    except OSError:
+        return False
+
+
 def _extract_asset_atomically(
     tar: tarfile.TarFile,
     member: tarfile.TarInfo,
@@ -919,6 +1033,7 @@ def recover(file_path: str, keys_password: str | None = None) -> KeysRestore:
         if hasattr(tarfile, 'data_filter'):
             extract_kwargs['filter'] = 'data'
         restored_dbs: set[str] = set()
+        restored_any_db = False
         try:
             for member in tar.getmembers():
                 # The manifest and the device keys were read above; they
@@ -944,7 +1059,30 @@ def recover(file_path: str, keys_password: str | None = None) -> KeysRestore:
                         member.name,
                     )
                     continue
-                if member.isfile() and _is_asset_member(member.name):
+                if member.isfile() and _is_db_file(member.name):
+                    db_path = path.join(home, member.name)
+                    restored_any_db = True
+                    # A live database is restored into through SQLite,
+                    # so the connections the server, Celery and the
+                    # viewer hold on it stay valid. See
+                    # _restore_database_online.
+                    if _restore_database_online(
+                        tar, member, home, extract_kwargs
+                    ):
+                        continue
+                    tar.extract(member, **extract_kwargs)
+                    # No live database was there, so the file was written
+                    # as-is. On an upgraded device ``.screenly`` and
+                    # ``screenly.db`` are back-compat symlinks to
+                    # ``.anthias/anthias.db`` (bin/migrate_legacy_paths.sh),
+                    # so a pre-rebrand archive's database is extracted
+                    # through them into the canonical file. SQLite keeps the
+                    # WAL beside the file it resolves to, so clear the
+                    # sidecars of both the name as written and the file it
+                    # landed in.
+                    restored_dbs.add(db_path)
+                    restored_dbs.add(path.realpath(db_path))
+                elif member.isfile() and _is_asset_member(member.name):
                     # Swapped in atomically — a live request for this
                     # asset must never see it half-written. See
                     # _extract_asset_atomically.
@@ -953,18 +1091,6 @@ def recover(file_path: str, keys_password: str | None = None) -> KeysRestore:
                     )
                 else:
                     tar.extract(member, **extract_kwargs)
-                if member.isfile() and _is_db_file(member.name):
-                    # On an upgraded device ``.screenly`` and
-                    # ``screenly.db`` are back-compat symlinks to
-                    # ``.anthias/anthias.db`` (bin/migrate_legacy_paths.sh),
-                    # so a pre-rebrand archive's database is extracted
-                    # through them into the canonical file. SQLite keeps the
-                    # WAL beside the file it resolves to, so clear the
-                    # sidecars of both the name as written and the file it
-                    # landed in.
-                    db_path = path.join(home, member.name)
-                    restored_dbs.add(db_path)
-                    restored_dbs.add(path.realpath(db_path))
         finally:
             # The main database file has just been replaced; anything
             # left of the old one's write-ahead log would be replayed
@@ -976,7 +1102,7 @@ def recover(file_path: str, keys_password: str | None = None) -> KeysRestore:
     # The archive may hold an older schema; migrate the restored
     # database up to what this system expects.
     _upgrade_restored_database()
-    if restored_dbs:
+    if restored_any_db:
         _forget_restored_credentials()
 
     if key_files:

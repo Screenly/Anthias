@@ -1410,3 +1410,170 @@ def test_backup_falls_back_when_the_database_stays_locked(
     archive = path.join(backup_home, static_dir, result['archive'])
     with tarfile.open(archive) as tar:
         assert tar.getnames().count('.anthias/anthias.db') == 1
+
+
+def _archive_with_database(
+    backup_home: str, tmp_path: Path, marker: str, *, wal: bool = True
+) -> str:
+    """An archive whose database holds ``marker``, built off to the side."""
+    archived_db = str(tmp_path / f'archived-{marker}.db')
+    if wal:
+        _write_wal_database(archived_db, marker)
+    else:
+        conn = sqlite3.connect(archived_db)
+        try:
+            conn.execute('CREATE TABLE marker (value TEXT)')
+            conn.execute('INSERT INTO marker VALUES (?)', (marker,))
+            conn.commit()
+        finally:
+            conn.close()
+    archive = path.join(backup_home, f'db-{marker}.tar.gz')
+    with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
+        _stage_legit_layout(tar)
+        tar.add(archived_db, arcname='.anthias/anthias.db')
+    return archive
+
+
+def test_recover_keeps_open_connections_working(
+    backup_home: str, tmp_path: Path
+) -> None:
+    """Connections open on the live database before a restore still
+    read and write it afterwards, and see the restored contents.
+
+    The server holds one connection per worker thread, and Celery and
+    the viewer hold their own. Writing the archived file over the live
+    one and deleting its sidecars left those handles on a WAL index
+    that was gone, so the first write after the restore broke them all
+    with ``disk I/O error``.
+    """
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    archive = _archive_with_database(backup_home, tmp_path, 'restored')
+    _write_wal_database(db_path, 'device')
+
+    idle = sqlite3.connect(db_path)
+    writer = sqlite3.connect(db_path)
+    try:
+        idle.execute('SELECT * FROM marker').fetchall()
+        writer.execute("INSERT INTO marker VALUES ('before-restore')")
+        writer.commit()
+
+        recover(archive)
+
+        # What _forget_restored_credentials does right after a restore.
+        fresh = sqlite3.connect(db_path)
+        try:
+            fresh.execute("INSERT INTO marker VALUES ('after-restore')")
+            fresh.commit()
+        finally:
+            fresh.close()
+
+        for name, conn in (('idle', idle), ('writer', writer)):
+            conn.execute('INSERT INTO marker VALUES (?)', (name,))
+            conn.commit()
+            rows = [r[0] for r in conn.execute('SELECT value FROM marker')]
+            assert rows[:2] == ['restored', 'after-restore'], rows
+            assert 'device' not in rows and 'before-restore' not in rows
+    finally:
+        idle.close()
+        writer.close()
+
+
+def test_recover_keeps_the_live_database_in_wal_mode(
+    backup_home: str, tmp_path: Path
+) -> None:
+    """An archive from a device on the rollback journal is restored into
+    a WAL database without switching it out of WAL under the
+    connections that rely on it."""
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    archive = _archive_with_database(
+        backup_home, tmp_path, 'from-rollback', wal=False
+    )
+    _write_wal_database(db_path, 'device')
+
+    recover(archive)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        mode = conn.execute('PRAGMA journal_mode').fetchone()[0]
+    finally:
+        conn.close()
+    assert mode == 'wal'
+    assert _read_marker(db_path) == 'from-rollback'
+
+
+def test_recover_leaves_no_staged_database_behind(
+    backup_home: str, tmp_path: Path
+) -> None:
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    archive = _archive_with_database(backup_home, tmp_path, 'restored')
+    _write_wal_database(db_path, 'device')
+
+    recover(archive)
+
+    leftovers = [
+        name
+        for name in os.listdir(path.join(backup_home, '.anthias'))
+        if name.startswith('.restore-')
+    ]
+    assert leftovers == []
+
+
+def test_recover_refuses_a_database_member_that_is_not_one(
+    backup_home: str,
+) -> None:
+    """A database member that is not SQLite never replaces a working
+    database."""
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    _write_wal_database(db_path, 'device')
+    archive = path.join(backup_home, 'garbage-db.tar.gz')
+    with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
+        _stage_legit_layout(tar)
+        _add_file_member(tar, '.anthias/anthias.db', b'not a database')
+
+    with pytest.raises(BackupRecoverError, match='not a database'):
+        recover(archive)
+
+    assert _read_marker(db_path) == 'device'
+    assert not [
+        name
+        for name in os.listdir(path.join(backup_home, '.anthias'))
+        if name.startswith('.restore-')
+    ]
+
+
+def test_recover_gives_up_on_a_database_that_stays_locked(
+    backup_home: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``Connection.backup()`` retries a busy destination forever; the
+    restore must stop at its timeout and leave the database as it was.
+    """
+    monkeypatch.setattr(backup_helper, '_RESTORE_TIMEOUT_S', 0.2)
+    db_path = path.join(backup_home, '.anthias', 'anthias.db')
+    archive = _archive_with_database(backup_home, tmp_path, 'restored')
+    conn = sqlite3.connect(db_path)
+    conn.execute('CREATE TABLE marker (value TEXT)')
+    conn.execute("INSERT INTO marker VALUES ('device')")
+    conn.commit()
+    conn.close()
+
+    writer = sqlite3.connect(db_path, isolation_level=None)
+    writer.execute('BEGIN EXCLUSIVE')
+    result: dict[str, BaseException] = {}
+
+    def run() -> None:
+        try:
+            recover(archive)
+        except BaseException as exc:
+            result['error'] = exc
+
+    try:
+        worker = threading.Thread(target=run, daemon=True)
+        worker.start()
+        worker.join(timeout=10)
+        assert not worker.is_alive(), 'restore blocked on a locked database'
+    finally:
+        writer.rollback()
+        writer.close()
+
+    assert isinstance(result.get('error'), BackupRecoverError)
+    assert _read_marker(db_path) == 'device'
