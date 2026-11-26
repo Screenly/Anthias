@@ -79,19 +79,6 @@
          if system_watchdog_device != ''
          else 'No watchdog armed: no device on this board is known to reset it, and softdog could not be loaded.' }}
 
-- name: Keep softdog across reboots
-  ansible.builtin.copy:
-    dest: /etc/modules-load.d/anthias-softdog.conf
-    content: |
-      # Managed by Anthias: this board has no watchdog driver measured
-      # to reset it, so the kernel's software watchdog backs the reset
-      # instead. See ansible/roles/system/tasks/resilience.yml.
-      softdog
-    mode: "0644"  # NOSONAR - modules-load.d entries are world-readable
-    owner: root
-    group: root
-  when: system_watchdog_kind == 'soft'
-
 # Neither Raspberry Pi OS nor Armbian ships this directory, and
 # `template` does not create parents — measured: without this the run
 # fails on both, right at the point where it would have armed the
@@ -104,51 +91,58 @@
     owner: root
     group: root
 
-# Written on every host, with no `when`: on a board whose only
-# watchdog halts, the file's job is to keep systemd from arming it —
-# including Raspberry Pi OS's stock RuntimeWatchdogSec=1m — which is
-# the opposite of the usual "only write it when we have something".
-- name: Configure systemd's watchdog
-  ansible.builtin.template:
-    src: anthias-watchdog.conf
-    dest: /etc/systemd/system.conf.d/anthias-watchdog.conf
-    mode: "0644"  # NOSONAR - systemd requires world-readable drop-ins
-    owner: root
-    group: root
-  notify: Re-execute systemd to apply the watchdog settings
+- name: Arm the picked watchdog
+  ansible.builtin.include_tasks: watchdog-arm.yml
 
-# The handler would otherwise run at the end of the play, after the
-# check below has already looked.
-- name: Apply the watchdog settings before checking them
-  ansible.builtin.meta: flush_handlers
-
-# A typo'd device leaves systemd running with the watchdog silently
-# off, so ask the manager what it actually did rather than trusting
-# the file on disk.
+# A PC can expose a hardware watchdog that systemd still cannot take:
+# another process already holds it open (EBUSY), or the driver refuses
+# the timeout. systemd then logs it and runs with the watchdog off,
+# which is worse than softdog but no reason to abort the install and
+# leave the player without its containers. Reported on Debian 13 x86
+# upgrading to 2026.11.1; reproduced on a Pi 4 by holding
+# /dev/watchdog0 open from another process before the re-exec.
 #
-# Watchdog 0 has two device nodes: /dev/watchdog0 and the legacy
-# /dev/watchdog, which the kernel registers first
-# (watchdog_cdev_register() calls misc_register() before
-# cdev_device_add()). Asked for /dev/watchdog0, systemd falls back to
-# /dev/watchdog when watchdog0 isn't there yet. At boot that happens
-# when PID 1 retries the open while the driver is still loading, and
-# PID 1 then keeps holding /dev/watchdog. Seen on a Debian 13 PC
-# (forums.screenly.io topic 6909): `fuser` showed systemd on
-# /dev/watchdog, and a re-run of the installer failed here because
-# nothing changed to trigger the re-exec that would have reopened it
-# as watchdog0. It is the same device, so accept either name.
+# Decided once, up front: a block's `when` is re-evaluated for every
+# task inside it, and the block itself rewrites system_watchdog_kind.
+- name: Decide whether to fall back to softdog
+  ansible.builtin.set_fact:
+    system_watchdog_fallback: "{{ system_watchdog_kind == 'hw' and not (system_watchdog_armed | bool) }}"
+
+- name: Fall back to softdog when systemd cannot arm the hardware watchdog
+  when: system_watchdog_fallback | bool
+  block:
+    - name: Report the hardware watchdog systemd refused
+      ansible.builtin.debug:
+        msg: >-
+          systemd could not arm {{ system_watchdog_device }} (another
+          process may hold it open, or the driver rejected the timeout).
+          Falling back to softdog, or to no watchdog if this kernel
+          has no softdog (Raspberry Pi kernels do not build it).
+
+    - name: Pick softdog instead
+      ansible.builtin.script: anthias-pick-watchdog
+      args:
+        executable: /bin/bash
+      environment:
+        WD_SOFT_ONLY: "1"
+      register: system_watchdog_fallback_probe
+      changed_when: false
+
+    - name: Note the fallback device
+      ansible.builtin.set_fact:
+        system_watchdog_device: "{{ (system_watchdog_fallback_probe.stdout | default('')).splitlines() | first | default('') | trim }}"
+        system_watchdog_kind: "{{ (system_watchdog_fallback_probe.stdout | default('')).splitlines()[1:] | first | default('') | trim }}"
+
+    - name: Arm softdog
+      ansible.builtin.include_tasks: watchdog-arm.yml
+
+# A typo'd device, or softdog itself not taking, leaves systemd running
+# with the watchdog silently off; that is a bug on our side, so stop.
 - name: Confirm systemd armed the device we picked
-  ansible.builtin.shell: >-
-    set -o pipefail;
-    systemctl show --property=RuntimeWatchdogUSec --value | grep -qv '^0$'
-    && ls -l /proc/1/fd | grep -cE -- '-> ({{ system_watchdog_device_names | join("|") }})$'
-  args:
-    executable: /bin/bash
-  vars:
-    system_watchdog_device_names: >-
-      {{ [system_watchdog_device]
-         + (['/dev/watchdog'] if system_watchdog_device == '/dev/watchdog0' else []) }}
-  register: system_watchdog_armed
-  changed_when: false
-  failed_when: system_watchdog_armed.stdout | trim | int < 1
+  ansible.builtin.assert:
+    that: system_watchdog_armed | bool
+    fail_msg: >-
+      systemd is not holding {{ system_watchdog_device }} even though
+      the drop-in names it. Check `journalctl -b _PID=1 | grep -i watchdog`.
+    quiet: true
   when: system_watchdog_device != ''
