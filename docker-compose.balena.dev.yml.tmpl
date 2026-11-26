@@ -194,7 +194,7 @@ services:
   #     not 5, which is what a failure to reach NetworkManager looks
   #     like.
   anthias-wifi-connect:
-    image: ghcr.io/screenly-labs/wifi-connect:2026.10.13
+    image: ghcr.io/screenly-labs/wifi-connect:2026.11.2
     ulimits: *no-core-dumps
     # Serving DHCP, which does not survive Docker's NAT, and binding the
     # access point's own address on the wireless device.
