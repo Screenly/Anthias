@@ -39,7 +39,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --locked --no-build --group mypy
+          uv sync --locked --no-build --no-install-project --group mypy
 
       - name: Prepare config directory
         run: |
@@ -56,4 +56,4 @@ jobs:
 
       - name: Run mypy
         run: |
-          uv run --locked --no-build mypy .
+          uv run --locked --no-build --no-sync mypy .

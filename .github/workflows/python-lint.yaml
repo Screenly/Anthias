@@ -39,15 +39,15 @@ jobs:
 
     - name: Install dependencies
       run: |
-        uv sync --locked --no-build --group dev-host --group website
+        uv sync --locked --no-build --no-install-project --group dev-host --group website
 
     - name: Run Ruff linting checks
       run: |
-        uv run --locked --no-build ruff check .
+        uv run --locked --no-build --no-sync ruff check .
 
     - name: Run Ruff formatting checks
       run: |
-        uv run --locked --no-build ruff format --check .
+        uv run --locked --no-build --no-sync ruff format --check .
 
     # The repo-wide pytest addopts in pyproject.toml include
     # pytest-playwright flags; the rpi-imager unit tests don't pull

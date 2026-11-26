@@ -675,7 +675,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ needs.resolve-context.outputs.tag }}
         run: |
-          uv run --locked --no-build --group local \
+          uv run --locked --no-build --only-group local \
             python -m tools.raspberry_pi_imager.build_pi_imager_json \
             > rpi-imager.json
           jq empty rpi-imager.json
