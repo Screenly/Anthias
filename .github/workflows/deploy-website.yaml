@@ -39,10 +39,20 @@ on:
 # pages write so configure-pages can prepare the artifact); the
 # deploy job needs pages:write + id-token:write to publish.
 
-# Allow one concurrent deployment
+# One deployment at a time, and never cancel one already under way.
+#
+# Two master merges a minute apart each finish a schema run, so two
+# runs of this workflow arrive back to back. With cancel-in-progress the
+# second cancelled the first after its deploy job had already been
+# registered against the github-pages environment, and GitHub records
+# that as a failed deployment (three so far, the site current every
+# time). Queueing instead lets the first finish and the second publish
+# after it. A run superseded while still pending is dropped before any
+# job starts, so it leaves no deployment behind, and the newest run
+# always deploys last.
 concurrency:
   group: "pages"
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   BUN_VERSION: '1.3.13'
@@ -55,10 +65,9 @@ jobs:
   # workflow's push paths AND the schema workflow's, so it fires here
   # twice for one SHA: once on push, and again about ninety seconds
   # later when Generate OpenAPI Schema finishes. Both build the same
-  # site and both want the `pages` group, so the later cancels the
-  # earlier and leaves a cancelled run against master that reads as a
-  # failure. Harmless, and the site does end up current, but it reads
-  # as a broken deploy on a green commit.
+  # site and both want the `pages` group, so without this the commit
+  # would be built and published twice, the second time only to
+  # replace the first.
   #
   # The workflow_run copy is the one worth keeping. It is the only one
   # whose Fetch OpenAPI schema step can find a schema built from this
