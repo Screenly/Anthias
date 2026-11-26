@@ -4,7 +4,9 @@ import errno
 import logging
 import os
 import socket
+import tempfile
 from collections.abc import Iterator
+from pathlib import Path
 from signal import SIGKILL, SIGTERM
 from time import monotonic, sleep
 from typing import Any
@@ -48,6 +50,25 @@ def _listen_on(socket_path: Any) -> Any:
     listener.bind(str(socket_path))
     listener.listen(1)
     return listener
+
+
+@pytest.fixture
+def sock_dir() -> Iterator[Path]:
+    """A short directory for AF_UNIX socket paths.
+
+    ``sun_path`` holds at most 107 bytes, and pytest's ``tmp_path``
+    nests deep enough (base temp, ``popen-gwN`` under xdist, a 30-char
+    test name) to cross it when ``TMPDIR`` is itself long. ``connect()``
+    then fails with "AF_UNIX path too long", which the Wayland probe
+    deliberately reads as "can't tell, so ready", and the not-ready
+    assertions fail for reasons that have nothing to do with the code.
+    Rooted at ``/tmp`` rather than ``TMPDIR`` for the same reason: a
+    long ``TMPDIR`` alone can use up the budget.
+    """
+    short_root = '/tmp'  # NOSONAR: short scratch dir, removed on exit
+    base = short_root if os.path.isdir(short_root) else None
+    with tempfile.TemporaryDirectory(prefix='wl', dir=base) as path:
+        yield Path(path)
 
 
 @contextlib.contextmanager
@@ -4082,29 +4103,29 @@ class TestWaitForWaylandSocket:
         slept.assert_not_called()
 
     def test_returns_immediately_when_socket_listening(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+        self, monkeypatch: pytest.MonkeyPatch, sock_dir: Path
     ) -> None:
         # cage up and accepting: the probe connects on the first try and
         # the spawn proceeds without a single sleep.
-        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(sock_dir))
         monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
-        with _listening_unix_socket(tmp_path / 'wayland-1'):
+        with _listening_unix_socket(sock_dir / 'wayland-1'):
             slept = mock.Mock()
             monkeypatch.setattr(viewer, 'sleep', slept)
             viewer._wait_for_wayland_socket(monotonic() + 5)
         slept.assert_not_called()
 
     def test_waits_out_a_stale_socket_then_proceeds(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+        self, monkeypatch: pytest.MonkeyPatch, sock_dir: Path
     ) -> None:
         """Sentry ANTHIAS-1W: cage dies and leaves its socket inode
         behind. connect() is REFUSED (not ENOENT), so the old
         os.path.exists gate returned at once and every inline retry
         burned in ~13s against a compositor that was seconds from
         coming back. The wait must ride it out until cage rebinds."""
-        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(sock_dir))
         monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
-        socket_path = tmp_path / 'wayland-1'
+        socket_path = sock_dir / 'wayland-1'
         # A stale inode: the path exists, nothing is listening on it.
         socket_path.write_text('')
         os.unlink(socket_path)
@@ -4137,7 +4158,7 @@ class TestWaitForWaylandSocket:
         assert calls['n'] == 3
 
     def test_probe_reports_ready_on_an_error_it_cannot_read(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+        self, monkeypatch: pytest.MonkeyPatch, sock_dir: Path
     ) -> None:
         # Conservative by design: only ECONNREFUSED/ENOENT mean "not
         # ready". Anything else is a verdict we can't reach (e.g. a
@@ -4148,28 +4169,28 @@ class TestWaitForWaylandSocket:
             raise PermissionError(errno.EACCES, 'Permission denied')
 
         monkeypatch.setattr(socket.socket, 'connect', refuse_with_eacces)
-        assert viewer._wayland_socket_ready(str(tmp_path / 'guarded')) is True
+        assert viewer._wayland_socket_ready(str(sock_dir / 'guarded')) is True
 
     def test_probe_reports_not_ready_for_a_non_socket_path(
-        self, tmp_path: Any
+        self, sock_dir: Path
     ) -> None:
         # Linux answers ECONNREFUSED (not ENOTSOCK) for a regular file
         # at the socket path, so it is waited out exactly like a stale
         # socket. Pinned because the conservative branch above reads as
         # if a plain file would land there, and it does not.
-        plain = tmp_path / 'not-a-socket'
+        plain = sock_dir / 'not-a-socket'
         plain.write_text('')
         assert viewer._wayland_socket_ready(str(plain)) is False
 
     def test_probe_reports_not_ready_when_path_absent(
-        self, tmp_path: Any
+        self, sock_dir: Path
     ) -> None:
-        assert viewer._wayland_socket_ready(str(tmp_path / 'nope')) is False
+        assert viewer._wayland_socket_ready(str(sock_dir / 'nope')) is False
 
     def test_fires_via_env_not_board_helper(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Any,
+        sock_dir: Path,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         # The wait is decoupled from _is_wayland_board(): even a board the
@@ -4181,7 +4202,7 @@ class TestWaitForWaylandSocket:
         monkeypatch.delenv('QT_QPA_PLATFORM', raising=False)
         monkeypatch.setenv('DEVICE_TYPE', 'pi5')
         assert viewer._is_wayland_board() is False
-        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(sock_dir))
         monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
         monkeypatch.setattr(viewer, 'sleep', lambda _s: None)
         with caplog.at_level(logging.WARNING):
@@ -4195,11 +4216,11 @@ class TestWaitForWaylandSocket:
         )
 
     def test_waits_then_proceeds_when_socket_appears(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+        self, monkeypatch: pytest.MonkeyPatch, sock_dir: Path
     ) -> None:
-        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(sock_dir))
         monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
-        socket_path = tmp_path / 'wayland-1'
+        socket_path = sock_dir / 'wayland-1'
 
         # The socket shows up after the second poll.
         calls = {'n': 0}
@@ -4221,17 +4242,17 @@ class TestWaitForWaylandSocket:
         assert calls['n'] >= 2
 
     def test_bounded_when_socket_never_appears(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+        self, monkeypatch: pytest.MonkeyPatch, sock_dir: Path
     ) -> None:
         # A dead compositor must not hang the asset_loop thread — once
         # the shared deadline passes the wait falls through and lets the
         # spawn fail the normal way.
-        monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
+        monkeypatch.setenv('XDG_RUNTIME_DIR', str(sock_dir))
         monkeypatch.setenv('WAYLAND_DISPLAY', 'wayland-1')
         monkeypatch.setattr(viewer, 'sleep', lambda _s: None)
         # Deadline already in the past → returns at once, no hang.
         viewer._wait_for_wayland_socket(monotonic() - 1)
-        assert not (tmp_path / 'wayland-1').exists()
+        assert not (sock_dir / 'wayland-1').exists()
 
     def test_skips_when_runtime_dir_missing(
         self, monkeypatch: pytest.MonkeyPatch
