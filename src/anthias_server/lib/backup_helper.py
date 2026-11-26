@@ -826,10 +826,22 @@ def _extract_asset_atomically(
     directory = path.dirname(member.name)
     staged_name = f'{directory}/.restore-{uuid.uuid4().hex}.tmp'
     staged = member.replace(name=staged_name, deep=False)
-    staged_path = path.join(home, staged_name)
+    # The caller already ran _safe_tar_member, but both paths below are
+    # built from archive entry names and handed to os.replace/remove, so
+    # confirm they stay under home right where they are used.
+    root = path.realpath(home)
+    staged_path = path.realpath(path.join(root, staged_name))
+    final_path = path.realpath(path.join(root, member.name))
+    if not (
+        staged_path.startswith(root + os.sep)
+        and final_path.startswith(root + os.sep)
+    ):
+        raise BackupRecoverError(
+            f'Refusing to restore {member.name!r} outside {home!r}.'
+        )
     try:
         tar.extract(staged, **extract_kwargs)
-        os.replace(staged_path, path.join(home, member.name))
+        os.replace(staged_path, final_path)
     except BaseException:
         try:
             remove(staged_path)
