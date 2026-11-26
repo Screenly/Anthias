@@ -18,7 +18,7 @@ SERVER = 'ghcr.io/screenly/anthias-server:latest-pi4-64'
 VIEWER = 'ghcr.io/screenly/anthias-viewer:latest-pi4-64'
 SERVER_DIGEST = 'ghcr.io/screenly/anthias-server@sha256:' + 'a' * 64
 VIEWER_DIGEST = 'ghcr.io/screenly/anthias-viewer@sha256:' + 'b' * 64
-WIFI = 'ghcr.io/screenly-labs/wifi-connect:2026.10.13'
+WIFI = 'ghcr.io/screenly-labs/wifi-connect:2026.11.2'
 WIFI_DIGEST = 'ghcr.io/screenly-labs/wifi-connect@sha256:' + 'd' * 64
 
 IDENTITY = (
@@ -27,7 +27,7 @@ IDENTITY = (
 )
 WIFI_IDENTITY = (
     'https://github.com/Screenly-Labs/wifi-connect/.github/workflows/'
-    'release.yml@refs/tags/v2026.10.13'
+    'release.yml@refs/tags/v2026.11.2'
 )
 ISSUER = 'https://token.actions.githubusercontent.com'
 

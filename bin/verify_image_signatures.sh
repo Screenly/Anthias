@@ -22,8 +22,8 @@
 #
 #   * ghcr.io/screenly-labs/wifi-connect is upstream's image, signed by
 #     its release.yml for the git tag it was cut from. The identity is
-#     derived from the pinned image tag (2026.10.13 must come from
-#     refs/tags/v2026.10.13), so a signed image from some other release
+#     derived from the pinned image tag (2026.11.2 must come from
+#     refs/tags/v2026.11.2), so a signed image from some other release
 #     re-pushed under the pinned tag fails too. This one matters most: it
 #     runs with host networking.
 #
