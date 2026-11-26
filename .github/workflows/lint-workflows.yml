@@ -32,7 +32,7 @@ jobs:
           ACTIONLINT_FILE="actionlint_${{ matrix.actionlint-version }}_linux_amd64.tar.gz"
           ACTIONLINT_URL="https://github.com/rhysd/actionlint/releases/download"
           ACTIONLINT_DOWNLOAD_URL="$ACTIONLINT_URL/v${{ matrix.actionlint-version }}/$ACTIONLINT_FILE"
-          curl -L -o actionlint.tar.gz "$ACTIONLINT_DOWNLOAD_URL"
+          curl --proto '=https' --tlsv1.2 -fsSL -o actionlint.tar.gz "$ACTIONLINT_DOWNLOAD_URL"
           tar xzf actionlint.tar.gz
         shell: bash
 

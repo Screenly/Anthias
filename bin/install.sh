@@ -219,7 +219,7 @@ function require_supported_environment() {
 # update + start prompting the user. Saves a long, confusing failure
 # when the device has no network configured yet.
 function require_network() {
-    if ! curl -fsSL --max-time 10 -o /dev/null "${GITHUB_API_REPO_URL}"; then
+    if ! curl --proto '=https' --tlsv1.2 -fsSL --max-time 10 -o /dev/null "${GITHUB_API_REPO_URL}"; then
         echo "error: cannot reach ${GITHUB_API_REPO_URL}" >&2
         echo "       install.sh needs network access to fetch releases and" >&2
         echo "       clone the repo. Verify connectivity and retry." >&2
@@ -232,7 +232,7 @@ function require_network() {
 # attached (the only ones the installer can actually use); capped at
 # the 10 most recent so the menu fits on an 80×24 console.
 function fetch_release_menu_options() {
-    curl -fsSL --max-time 15 \
+    curl --proto '=https' --tlsv1.2 -fsSL --max-time 15 \
         "${GITHUB_API_REPO_URL}/releases?per_page=30" 2>/dev/null \
         | jq -r '
             .[]
@@ -247,7 +247,7 @@ function fetch_release_menu_options() {
 
 function fetch_docker_tag_for_release() {
     local TAG="$1"
-    curl -fsSL --max-time 15 \
+    curl --proto '=https' --tlsv1.2 -fsSL --max-time 15 \
         "${GITHUB_RELEASES_URL}/download/${TAG}/docker-tag" 2>/dev/null \
         || true
 }
@@ -379,7 +379,7 @@ function install_ansible() {
     # stage stay in lockstep (see docker/uv-builder.j2).
     if ! command -v uv &> /dev/null || \
         [ "$(uv --version 2>/dev/null | awk '{print $2}')" != "${UV_PIN_VERSION}" ]; then
-        curl -LsSf "https://astral.sh/uv/${UV_PIN_VERSION}/install.sh" | sh
+        curl --proto '=https' --tlsv1.2 -LsSf "https://astral.sh/uv/${UV_PIN_VERSION}/install.sh" | sh
     fi
     export PATH="$HOME/.local/bin:$PATH"
 
@@ -596,7 +596,7 @@ function upgrade_docker_containers() {
 
     # Pull upgrade_containers.sh from the same ref the user picked,
     # not master, so a tagged install gets the matching upgrade script.
-    curl -fsSL \
+    curl --proto '=https' --tlsv1.2 -fsSL \
         "${GITHUB_RAW_URL}/${BRANCH}/bin/upgrade_containers.sh" \
         -o "${UPGRADE_SCRIPT_PATH}"
 

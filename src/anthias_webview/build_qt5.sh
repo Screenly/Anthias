@@ -17,6 +17,9 @@ QT_MAJOR="5"
 QT_MINOR="15"
 QT_BUG_FIX="19"
 QT_VERSION="$QT_MAJOR.$QT_MINOR.$QT_BUG_FIX"
+# SHA-256 of qt-everywhere-opensource-src-$QT_VERSION.tar.xz. Update it
+# with QT_BUG_FIX (download.qt.io serves it at <tarball URL>.sha256).
+QT_SHA256="173c2326dae138bbb0d98921e9d911e55c00163d93a6db29f294b5e19ff306ae"
 DEBIAN_VERSION=$(lsb_release -cs)
 
 # Debian trixie ships Python 3.13, which removed stdlib modules Chromium
@@ -193,13 +196,11 @@ function fetch_qt () {
     if [ ! -d "$SRC_DIR" ]; then
 
         if [ ! -f "qt-everywhere-opensource-src-$QT_VERSION.tar.xz" ]; then
-            wget https://download.qt.io/archive/qt/$QT_MAJOR.$QT_MINOR/$QT_VERSION/single/qt-everywhere-opensource-src-$QT_VERSION.tar.xz
+            curl --proto '=https' --tlsv1.2 -fsSLO \
+                "https://download.qt.io/archive/qt/$QT_MAJOR.$QT_MINOR/$QT_VERSION/single/qt-everywhere-opensource-src-$QT_VERSION.tar.xz"
         fi
-
-        if [ ! -f "md5sums.txt" ]; then
-            wget https://download.qt.io/archive/qt/$QT_MAJOR.$QT_MINOR/$QT_VERSION/single/md5sums.txt
-        fi
-        md5sum --ignore-missing -c md5sums.txt
+        echo "$QT_SHA256  qt-everywhere-opensource-src-$QT_VERSION.tar.xz" \
+            | sha256sum -c -
 
         # Extract and make a clone
         tar xf qt-everywhere-opensource-src-$QT_VERSION.tar.xz

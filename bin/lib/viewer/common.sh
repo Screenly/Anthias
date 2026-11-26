@@ -220,7 +220,7 @@ chown -Rf root:root /etc/sudoers.d
 chown -Rf root:root /etc/sudo.conf
 chown -Rf root:root /usr/lib/sudo
 chown -f root:root /etc/sudoers
-chmod -f 4755 /usr/bin/sudo
+chmod -f 4755 /usr/bin/sudo # NOSONAR: stock sudo mode (setuid root, not writable by others)
 
 # SIGUSR1 from the viewer is also sent to the container
 # Prevent it so that the container does not fail

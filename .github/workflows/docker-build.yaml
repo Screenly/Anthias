@@ -97,8 +97,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv venv
-          uv pip install --group docker-image-builder
+          uv sync --locked --no-build --group docker-image-builder
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
@@ -149,7 +148,7 @@ jobs:
           # has no `pull_request` trigger; PRs never run this job.
           BUILDX_CACHE_BACKEND: ${{ github.event_name == 'push' && 'registry' || 'local' }}
         run: |
-          uv run python -m tools.image_builder \
+          uv run --locked --no-build python -m tools.image_builder \
             --build-target=${{ matrix.board }} \
             --service=server \
             --service=viewer \

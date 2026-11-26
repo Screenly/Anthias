@@ -39,17 +39,15 @@ jobs:
 
     - name: Install dependencies
       run: |
-        uv venv
-        uv pip install --group dev-host
-        uv pip install --group website
+        uv sync --locked --no-build --group dev-host --group website
 
     - name: Run Ruff linting checks
       run: |
-        uv run ruff check .
+        uv run --locked --no-build ruff check .
 
     - name: Run Ruff formatting checks
       run: |
-        uv run ruff format --check .
+        uv run --locked --no-build ruff format --check .
 
     # The repo-wide pytest addopts in pyproject.toml include
     # pytest-playwright flags; the rpi-imager unit tests don't pull
@@ -57,8 +55,8 @@ jobs:
     # deploy-website test job used; this is now the rpi-imager
     # generator's only PR-time CI gate after that job was removed.
     #
-    # `-p no:django` bypasses the pytest-django plugin. The earlier
-    # `uv run ruff check` steps implicitly sync the project venv with
+    # `-p no:django` bypasses the pytest-django plugin. The install
+    # step's `uv sync` also syncs the project venv with
     # the default group set (the `dev` group ships pytest-django
     # 4.12.0 + playwright + etc.), so by the time we get here the
     # plugin is sitting in `.venv` as an auto-loading entry-point.

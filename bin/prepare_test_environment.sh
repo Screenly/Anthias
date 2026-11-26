@@ -48,7 +48,7 @@ EOF
 if [ "$START_SERVER" = true ]; then
     cd /usr/src/app
 
-    bun install && bun run build
+    bun install --ignore-scripts && bun run build
 
     python -m anthias_server.manage makemigrations
     python -m anthias_server.manage migrate --fake-initial

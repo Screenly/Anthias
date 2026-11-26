@@ -60,7 +60,7 @@ for f in "${SOURCES[@]}"; do
     fi
     url="$BBB_BASE/$f"
     log "  $f: downloading from $url"
-    curl -sSL --fail -o "$f.tmp" "$url"
+    curl --proto '=https' --tlsv1.2 -sSL --fail -o "$f.tmp" "$url"
     mv "$f.tmp" "$f"
 done
 

@@ -35,12 +35,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv venv
-          uv pip install --group docker-image-builder
+          uv sync --locked --no-build --group docker-image-builder
 
       - name: Build Containers
         run: |
-          uv run python -m tools.image_builder \
+          uv run --locked --no-build python -m tools.image_builder \
             --dockerfiles-only \
             --disable-cache-mounts \
             --service redis \

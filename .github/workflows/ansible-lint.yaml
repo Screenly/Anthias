@@ -41,9 +41,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv venv
-          uv pip install --group dev-host
+          uv sync --locked --no-build --group dev-host
 
       - name: Run ansible-lint
         run: |
-          uv run ansible-lint ansible/
+          uv run --locked --no-build ansible-lint ansible/

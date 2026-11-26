@@ -43,6 +43,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import subprocess
 import sys
 import time
@@ -64,6 +65,20 @@ FLEET_DEVICE_TYPE = {
 MAINTENANCE_TAG = 'anthias_maintenance'
 
 
+def os_version_arg(value: str) -> str:
+    """argparse type for --os-version, e.g. '6.12.3+rev4' or 'v6.12.3'.
+
+    The value goes straight into `balena os-update`, so refuse anything
+    that is not a plain version (an option-looking string included).
+    """
+    version = normalize_os(value)
+    if not re.fullmatch(r'\d+\.\d+\.\d+(\+rev\d+)?', version):
+        raise argparse.ArgumentTypeError(
+            f'{value!r} is not a balenaOS version (e.g. 6.12.3+rev4)'
+        )
+    return version
+
+
 def run_balena(
     args: list[str], parse_json: bool = False
 ) -> tuple[bool, Any, str]:
@@ -72,8 +87,10 @@ def run_balena(
     balena prints Node/CLI warnings to stderr, so stdout stays clean for
     --json parsing. Never raises — callers decide how to handle failure.
     """
+    # args are fixed subcommands plus a fleet from FLEET_DEVICE_TYPE, a
+    # validated OS version and device UUIDs from balena itself.
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # NOSONAR
             ['balena', *args],
             capture_output=True,
             text=True,
@@ -175,7 +192,8 @@ def load_done(state_path: str) -> set[str]:
     uuid<TAB>fleet<TAB>timestamp<TAB>status)."""
     done = set()
     try:
-        with open(state_path, encoding='utf-8') as fh:
+        # --state is the operator's own local file, by design.
+        with open(state_path, encoding='utf-8') as fh:  # NOSONAR
             for line in fh:
                 parts = line.rstrip('\n').split('\t')
                 if len(parts) >= 4 and parts[3] == 'ok':
@@ -188,7 +206,8 @@ def load_done(state_path: str) -> set[str]:
 def append_state(
     state_path: str, uuid: str, fleet: str, ts: str, status: str, detail: str
 ) -> None:
-    with open(state_path, 'a', encoding='utf-8') as fh:
+    # --state is the operator's own local file, by design.
+    with open(state_path, 'a', encoding='utf-8') as fh:  # NOSONAR
         fh.write(f'{uuid}\t{fleet}\t{ts}\t{status}\t{detail}\n')
 
 
@@ -268,6 +287,7 @@ def main() -> int:
         '--fleet',
         action='append',
         dest='fleets',
+        choices=sorted(FLEET_DEVICE_TYPE),
         help='fleet slug, e.g. screenly_ose/anthias-pi4 (repeatable)',
     )
     group.add_argument(
@@ -288,6 +308,7 @@ def main() -> int:
     )
     ap.add_argument(
         '--os-version',
+        type=os_version_arg,
         default=None,
         help='target balenaOS version (default: latest per device type)',
     )

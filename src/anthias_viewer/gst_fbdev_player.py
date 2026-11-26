@@ -56,6 +56,7 @@ pure helpers below).
 
 import argparse
 import logging
+import re
 import signal
 import sys
 from typing import Any
@@ -190,6 +191,20 @@ def clear_framebuffer(
         return False
 
 
+def fb_device_arg(value: str) -> str:
+    """argparse type for --fb-device: only a ``/dev/fbN`` node.
+
+    clear_framebuffer() overwrites the device with zeros, so anything
+    else (a typo, a regular file) must be refused up front.
+    """
+    match = re.fullmatch(r'/dev/fb(\d+)', value)
+    if match is None:
+        raise argparse.ArgumentTypeError(
+            f'{value!r} is not a framebuffer device (/dev/fbN)'
+        )
+    return f'/dev/fb{int(match.group(1))}'
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog='gst_fbdev_player',
@@ -208,7 +223,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         choices=sorted({0, ISP_FLIP_ROTATION, *GST_VIDEOFLIP_METHODS}),
     )
     parser.add_argument('--audio-device', default='')
-    parser.add_argument('--fb-device', default=FB_DEVICE)
+    parser.add_argument('--fb-device', type=fb_device_arg, default=FB_DEVICE)
     return parser.parse_args(argv)
 
 

@@ -106,8 +106,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv venv
-          uv pip install --group docker-image-builder
+          uv sync --locked --no-build --group docker-image-builder
 
       - name: Cache Docker layers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
@@ -120,7 +119,7 @@ jobs:
 
       - name: Build Images
         run: |
-          uv run python -m tools.image_builder \
+          uv run --locked --no-build python -m tools.image_builder \
             --dockerfiles-only \
             --disable-cache-mounts \
             --environment=development
