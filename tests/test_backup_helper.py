@@ -577,6 +577,24 @@ def test_recover_swaps_assets_atomically(backup_home: str) -> None:
     assert os.listdir(asset_dir) == ['pic.jpg']
 
 
+def test_extract_asset_refuses_path_outside_home(backup_home: str) -> None:
+    """_extract_asset_atomically re-checks containment itself rather than
+    trusting its caller, so an entry that escapes home never reaches
+    os.replace even if _safe_tar_member were bypassed."""
+    archive = path.join(backup_home, 'escape.tar.gz')
+    with tarfile.open(archive, 'w:gz') as tar:  # NOSONAR
+        _add_file_member(tar, 'anthias_assets/../../escape.jpg', b'X')
+
+    with tarfile.open(archive, 'r:gz') as tar:
+        member = tar.getmembers()[0]
+        with pytest.raises(BackupRecoverError):
+            backup_helper._extract_asset_atomically(
+                tar, member, backup_home, {'path': backup_home}
+            )
+
+    assert not path.exists(path.join(path.dirname(backup_home), 'escape.jpg'))
+
+
 def test_backup_ships_only_runtime_files(backup_home: str) -> None:
     """A backup captures the runtime whitelist and nothing else. Config,
     DB, default-asset manifest, db backups and assets are kept; the
