@@ -78,14 +78,29 @@ def test_reply_sender_pushes_json_and_sets_ttl() -> None:
     fake_redis.expire.assert_called_once_with(expected_key, 30)
 
 
+def _collector(fake_redis: MagicMock) -> ReplyCollector:
+    """A collector whose every connection is ``fake_redis``.
+
+    Both the shared connection (non-blocking LPOP) and the per-budget
+    blocking ones resolve to the same mock, so a test can assert on
+    ``lpop``/``blpop`` without caring which pool served it.
+    """
+    collector = ReplyCollector.__new__(ReplyCollector)
+    collector._redis = fake_redis
+    collector._blocking_redis = {}
+    collector._blocking_connection = (  # type: ignore[method-assign]
+        lambda timeout_seconds: fake_redis
+    )
+    return collector
+
+
 def test_reply_collector_recv_blocking_returns_decoded_payload() -> None:
     fake_redis = MagicMock()
     fake_redis.blpop.return_value = (
         f'{REPLY_KEY_PREFIX}cid'.encode(),
         json.dumps({'ok': True}),
     )
-    collector = ReplyCollector.__new__(ReplyCollector)
-    collector._redis = fake_redis
+    collector = _collector(fake_redis)
 
     result = collector.recv_json('cid', timeout_ms=2000)
     assert result == {'ok': True}
@@ -97,8 +112,7 @@ def test_reply_collector_recv_blocking_returns_decoded_payload() -> None:
 def test_reply_collector_blocking_rounds_up_to_next_second() -> None:
     fake_redis = MagicMock()
     fake_redis.blpop.return_value = (b'k', json.dumps(1))
-    collector = ReplyCollector.__new__(ReplyCollector)
-    collector._redis = fake_redis
+    collector = _collector(fake_redis)
 
     collector.recv_json('cid', timeout_ms=1500)
     # 1500ms → 2 seconds.
@@ -110,11 +124,91 @@ def test_reply_collector_blocking_rounds_up_to_next_second() -> None:
 def test_reply_collector_blocking_timeout() -> None:
     fake_redis = MagicMock()
     fake_redis.blpop.return_value = None
-    collector = ReplyCollector.__new__(ReplyCollector)
-    collector._redis = fake_redis
+    collector = _collector(fake_redis)
 
     with pytest.raises(ReplyTimeoutError):
         collector.recv_json('cid', timeout_ms=100)
+
+
+def test_blocking_pop_socket_read_outlives_the_pop() -> None:
+    """The socket read must outlast the BLPOP it carries.
+
+    On redis-py's defaults (``socket_timeout=5``,
+    ``Retry(retries=10)``) a 15s pop does not wait 15s and then come
+    back empty: the socket read gives up after 5, the ladder re-issues
+    the pop ten more times, and the call raises ``redis.TimeoutError``
+    about a minute later. Measured at 58.0s for ``cec_client``'s 15s
+    budget, which is how ``get_display_power`` reached its 60s hard
+    limit and had its pool child SIGKILLed.
+    """
+    created: list[dict[str, Any]] = []
+
+    def fake_connect(**overrides: Any) -> MagicMock:
+        created.append(overrides)
+        return MagicMock()
+
+    collector = ReplyCollector.__new__(ReplyCollector)
+    collector._redis = MagicMock()
+    collector._blocking_redis = {}
+
+    with mock.patch(
+        'anthias_common.utils.connect_to_redis', side_effect=fake_connect
+    ):
+        collector._blocking_connection(15)
+
+    assert len(created) == 1
+    overrides = created[0]
+    assert overrides['socket_timeout'] > 15, (
+        'the socket read gives up before the pop does, so the pop is '
+        'abandoned rather than returning empty'
+    )
+    # Re-issuing a blocking pop restarts its wait from zero, which is
+    # what turns one bounded request into a minute-long stall.
+    assert overrides['retry_on_timeout'] is False
+    assert overrides['retry'].get_retries() == 0
+
+
+def test_blocking_connections_are_cached_per_budget() -> None:
+    """One pool per distinct budget, not one per pop."""
+    collector = ReplyCollector.__new__(ReplyCollector)
+    collector._redis = MagicMock()
+    collector._blocking_redis = {}
+
+    with mock.patch(
+        'anthias_common.utils.connect_to_redis',
+        side_effect=lambda **kwargs: MagicMock(),
+    ) as connect:
+        first = collector._blocking_connection(15)
+        again = collector._blocking_connection(15)
+        other = collector._blocking_connection(2)
+
+    assert first is again
+    assert other is not first
+    assert connect.call_count == 2
+
+
+def test_cec_reply_budget_is_carried_by_the_blocking_connection() -> None:
+    """``cec_client``'s budget must be one the transport can carry.
+
+    Ties the constant to the fix: if the CEC budget grows past what
+    ``_blocking_connection`` sizes for, the pop silently falls back
+    into the retry ladder and the ANTHIAS-A/9/B/1Q chain returns.
+    """
+    from anthias_server.lib import cec_client
+
+    budget_seconds = (cec_client.REPLY_TIMEOUT_MS + 999) // 1000
+
+    collector = ReplyCollector.__new__(ReplyCollector)
+    collector._redis = MagicMock()
+    collector._blocking_redis = {}
+
+    with mock.patch(
+        'anthias_common.utils.connect_to_redis',
+        side_effect=lambda **kwargs: MagicMock(),
+    ) as connect:
+        collector._blocking_connection(budget_seconds)
+
+    assert connect.call_args.kwargs['socket_timeout'] > budget_seconds
 
 
 def test_reply_collector_non_blocking_uses_lpop() -> None:
