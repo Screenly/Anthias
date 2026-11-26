@@ -81,9 +81,10 @@ def test_build_fit_caps_without_dims_only_pins_format_and_par() -> None:
     )
 
 
-def _args(rotation: int = 0) -> Any:
+def _args(rotation: int = 0, extra: list[str] | None = None) -> Any:
     return parse_args(
         [
+            *(extra or []),
             '--uri',
             'file:///test/video.mp4',
             '--fb-width',
@@ -148,6 +149,18 @@ def test_sink_description_180_rotates_in_the_isp() -> None:
 def test_parse_args_rejects_non_cardinal_rotation() -> None:
     with pytest.raises(SystemExit):
         _args(rotation=45)
+
+
+def test_parse_args_accepts_framebuffer_device() -> None:
+    assert _args(extra=['--fb-device', '/dev/fb1']).fb_device == '/dev/fb1'
+
+
+@pytest.mark.parametrize(
+    'device', ['/etc/passwd', '/dev/fb0/../sda', 'fb0', '/dev/fb']
+)
+def test_parse_args_rejects_non_framebuffer_device(device: str) -> None:
+    with pytest.raises(SystemExit):
+        _args(extra=['--fb-device', device])
 
 
 def test_clear_framebuffer_writes_stride_times_height() -> None:

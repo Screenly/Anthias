@@ -1,13 +1,12 @@
 FROM mirror.gcr.io/library/python:3.13-trixie
 
-RUN apt-get update -y && \
-    pip install uv
+COPY --from=ghcr.io/astral-sh/uv:0.9.17 /uv /uvx /usr/local/bin/
 
 WORKDIR /app
 
 COPY pyproject.toml uv.lock /app/
 
-RUN uv sync --group docker-image-builder --no-install-project
+RUN uv sync --locked --no-build --group docker-image-builder --no-install-project
 
 RUN git config --global --add safe.directory /app
 

@@ -105,7 +105,7 @@ fi
 
 if [[ "$ENVIRONMENT" == "development" ]]; then
     echo "Building frontend assets..."
-    bun install && bun run build
+    bun install --ignore-scripts && bun run build
     echo "Starting uvicorn (development, --reload)..."
     # uvicorn's --reload watches *.py only by default. Add Django
     # templates and built CSS so a template / SCSS edit on the host

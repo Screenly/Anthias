@@ -171,6 +171,7 @@ RUN apt-get update && \
     apt-get -y install \
         bison \
         build-essential \
+        ca-certificates \
         ccache \
         cowsay \
         crossbuild-essential-armhf \
@@ -253,7 +254,7 @@ RUN apt-get update && \
 # all stay on system python3. /usr/local/bin/python -> python2.7
 # lets QtWebEngine's `/usr/bin/env python` resolve in non-interactive
 # `docker run /webview/build_qt5.sh` shells.
-RUN printf 'Types: deb\nURIs: http://archive.debian.org/debian\nSuites: bullseye\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\n' \
+RUN printf 'Types: deb\nURIs: https://archive.debian.org/debian\nSuites: bullseye\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\n' \
         > /etc/apt/sources.list.d/bullseye.sources && \
     printf 'Package: *\nPin: release n=bullseye\nPin-Priority: 100\n\nPackage: python2.7 python2.7-minimal libpython2.7 libpython2.7-stdlib libpython2.7-minimal\nPin: release n=bullseye\nPin-Priority: 990\n' \
         > /etc/apt/preferences.d/bullseye-py2 && \

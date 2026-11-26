@@ -180,7 +180,7 @@ jobs:
 
       - name: Install Hugo
         run: |
-          wget -q "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb" -O hugo.deb
+          curl --proto '=https' --tlsv1.2 -fsSL -o hugo.deb "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb"
           sudo dpkg -i hugo.deb
           rm hugo.deb
           hugo version
@@ -193,7 +193,7 @@ jobs:
         run: bash .github/workflows/scripts/install-bun.sh
 
       - name: Install website dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
         working-directory: website
 
       # Pull the high-DPI marketing captures produced by the

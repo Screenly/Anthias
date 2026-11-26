@@ -5,7 +5,7 @@
     state: directory
     owner: "{{ anthias_user }}"
     group: "{{ anthias_user }}"
-    mode: "0755"
+    mode: "0755"  # NOSONAR: owner-only write, stock mode for home subdirs
   with_items:
     - .anthias
     - .config
@@ -18,13 +18,13 @@
     force: false
     group: "{{ anthias_user }}"
     owner: "{{ anthias_user }}"
-    mode: "0644"
+    mode: "0644"  # NOSONAR: empty ALSA config, owner-only write
 
 - name: Copy Anthias default assets file
   ansible.builtin.copy:
     owner: "{{ anthias_user }}"
     group: "{{ anthias_user }}"
-    mode: "0644"
+    mode: "0644"  # NOSONAR: non-secret default playlist, owner-only write
     src: default_assets.yml
     dest: "/home/{{ anthias_user }}/.anthias/default_assets.yml"
     force: true
@@ -173,7 +173,7 @@
   ansible.builtin.template:
     src: "{{ item }}"
     dest: "/etc/systemd/system/{{ item }}"
-    mode: "0644"
+    mode: "0644"  # NOSONAR: systemd unit files must be world-readable
     owner: root
     group: root
   with_items: "{{ anthias_systemd_units }}"
