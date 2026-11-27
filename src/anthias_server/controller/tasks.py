@@ -17,9 +17,8 @@ from django.utils import timezone
 
 from anthias_server import celery_tasks
 from anthias_server.celery_tasks import celery
-from anthias_server.controller import service
+from anthias_server.controller.mode import controller_enabled
 from anthias_server.controller.models import Node, NodeStatus, PublishState
-from anthias_server.controller.push import live_filter
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +59,8 @@ PUBLISH_RETRY_S = 15
 
 # Publishes share the one Celery worker with the display on/off
 # schedule, the asset probes and the rest; its pool is a process per
-# core, so four on a Pi 2/3. "Publish to all" queues one long upload
-# per screen, and without a cap they would take every process and hold
+# core (two on a board short of RAM: celery_tasks.low_ram_worker_settings).
+# "Publish to all" queues one long upload per screen, and without a cap they would take every process and hold
 # the display schedule back by minutes. At most this many publishes
 # run at once (never the whole pool); the others wait in the queue,
 # re-checking every PUBLISH_SLOT_RETRY_S, without holding a process.
@@ -129,6 +128,8 @@ def publish_lock_key(node_id: int) -> str:
     time_limit=PUBLISH_TIME_LIMIT_S,
 )
 def publish_to_node(node_id: int, actor: str = '') -> str:
+    from anthias_server.controller import service
+
     node = Node.objects.filter(pk=node_id).first()
     if node is None:
         return 'screen removed'
@@ -168,6 +169,8 @@ def publish_to_node(node_id: int, actor: str = '') -> str:
     time_limit=COMMAND_TIME_LIMIT_S,
 )
 def node_command(node_id: int, command: str, actor: str = '') -> str:
+    from anthias_server.controller import service
+
     node = Node.objects.filter(pk=node_id).first()
     if node is None:
         return 'screen removed'
@@ -179,6 +182,8 @@ def node_command(node_id: int, command: str, actor: str = '') -> str:
     time_limit=COMMAND_TIME_LIMIT_S,
 )
 def refresh_node(node_id: int) -> str:
+    from anthias_server.controller import service
+
     node = Node.objects.filter(pk=node_id).first()
     if node is None:
         return 'screen removed'
@@ -193,6 +198,7 @@ def renewal_due(now: datetime) -> Q:
     has no live connection, or when half that margin has passed and it
     still has not.
     """
+    from anthias_server.controller.push import live_filter
     from anthias_server.lib import pki
 
     soon = now + pki.RENEW_BEFORE
@@ -207,6 +213,8 @@ def renewal_due(now: datetime) -> Q:
     time_limit=COMMAND_TIME_LIMIT_S,
 )
 def renew_node_certificate(node_id: int) -> str:
+    from anthias_server.controller import service
+
     node = Node.objects.filter(pk=node_id).first()
     if node is None:
         return 'screen removed'
@@ -225,10 +233,11 @@ def controller_housekeeping() -> None:
     * prune expired revocations and re-sign the CRL when due;
     * queue a REST renewal for screens whose certificate is due.
     """
+    if not controller_enabled():
+        return
+
     from anthias_server.controller import ca, join
 
-    if not service.controller_enabled():
-        return
     try:
         expired = join.expire_requests()
         if expired:
@@ -263,8 +272,12 @@ def refresh_nodes() -> int:
     FALLBACK_POLL_S (or was cleared). "Check now" on the Screens page
     polls every screen regardless (``refresh_node``).
     """
-    if not service.controller_enabled():
+    if not controller_enabled():
         return 0
+
+    from anthias_server.controller import service
+    from anthias_server.controller.push import live_filter
+
     lock_value = secrets.token_hex(8)
     if not celery_tasks.r.set(
         STATUS_LOCK_KEY, lock_value, nx=True, ex=STATUS_TIME_LIMIT_S
