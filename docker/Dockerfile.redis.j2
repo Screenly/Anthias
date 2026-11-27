@@ -64,6 +64,13 @@ ENV GIT_BRANCH={{ git_branch }}
 # writes that genuinely cannot proceed (ANTHIAS-6M, celerybeat's
 # on-disk schedule), so this hides no evidence -- it only stops one
 # device-local problem from taking the whole player down with it.
+
+# A damaged AOF makes redis-server exit at startup, and `restart:
+# always` would loop it forever. The entrypoint repairs the file (or
+# rebuilds it from the RDB snapshot) before handing over to the CMD.
+COPY --chmod=0755 docker/redis/entrypoint.sh /usr/local/bin/redis-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/redis-entrypoint.sh"]
+
 CMD ["redis-server", \
      "--protected-mode", "no", \
      "--dir", "/var/lib/redis", \
