@@ -1,10 +1,12 @@
 import io
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import certifi
 import pytest
+import redis
 import requests
 import sh
 
@@ -570,3 +572,22 @@ def test_memory_cache_mib_clamps_negative_to_zero() -> None:
     # A kernel whose used + free overshoots total must not produce a
     # negative wedge in the System Info pie.
     assert memory_cache_mib(_vmem(1024, 900, 512)) == 0
+
+
+def test_redis_host_honours_redis_host(monkeypatch: Any) -> None:
+    monkeypatch.setenv('REDIS_HOST', '127.0.0.1')
+    assert utils.redis_host() == '127.0.0.1'
+
+
+def test_redis_host_defaults_to_redis(monkeypatch: Any) -> None:
+    monkeypatch.delenv('REDIS_HOST', raising=False)
+    assert utils.redis_host() == 'redis'
+
+
+def test_connect_to_redis_uses_redis_host(
+    monkeypatch: Any, real_connect_to_redis: Callable[..., Any]
+) -> None:
+    monkeypatch.setenv('REDIS_HOST', '127.0.0.1')
+    with patch.object(redis, 'Redis') as mock_redis:
+        real_connect_to_redis()
+    assert mock_redis.call_args.kwargs['host'] == '127.0.0.1'
