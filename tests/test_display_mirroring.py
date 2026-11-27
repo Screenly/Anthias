@@ -397,3 +397,122 @@ def test_settings_save_ignores_mirroring_on_other_boards(
             },
         )
         assert settings['display_mirroring'] is expected
+
+
+@pytest.mark.usefixtures('mirror_state')
+@pytest.mark.parametrize('blanked', [False, True])
+def test_saved_mirroring_change_restarts_even_when_playback_is_paused(
+    blanked: bool,
+) -> None:
+    with (
+        mock.patch.dict(
+            'os.environ',
+            {'QT_QPA_PLATFORM': 'wayland', dm.CAGE_MIRRORING_ENV: '0'},
+        ),
+        mock.patch.dict(settings, {'display_mirroring': True}),
+        mock.patch.object(viewer, 'loop_is_stopped', True),
+        mock.patch.object(viewer, 'display_blanked', blanked),
+        mock.patch.object(viewer, 'current_browser_url', viewer.BLACK_SCREEN),
+        mock.patch.object(viewer, '_compositor_restart_pending', False),
+        mock.patch.object(
+            viewer,
+            'sleep',
+            side_effect=RuntimeError('still paused without restarting'),
+        ),
+    ):
+        viewer._maybe_restart_for_mirroring()
+        with pytest.raises(SystemExit):
+            viewer.start_loop()
+
+
+@pytest.mark.usefixtures('mirror_state')
+def test_blank_unblank_keeps_mismatched_displays_mirrored() -> None:
+    heads = [
+        _head(
+            'HDMI-A-1',
+            [
+                _mode(3840, 2160, preferred=True, current=True),
+                _mode(1920, 1080),
+            ],
+        ),
+        _head(
+            'HDMI-A-2',
+            [_mode(1920, 1080, preferred=True, current=True)],
+            x=3840,
+        ),
+    ]
+
+    def run(
+        args: list[str], **_kwargs: Any
+    ) -> subprocess.CompletedProcess[str]:
+        params = args[1:]
+        if params == ['--json']:
+            stdout = json.dumps(heads)
+        elif not params:
+            stdout = '\n'.join(
+                f'{h["name"]} "Display"\n  Enabled: {"yes" if h["enabled"] else "no"}'
+                for h in heads
+            )
+        else:
+            stdout = ''
+            head: dict[str, Any] = {}
+            i = 0
+            while i < len(params):
+                flag = params[i]
+                if flag == '--output':
+                    head = next(h for h in heads if h['name'] == params[i + 1])
+                    i += 2
+                elif flag == '--mode':
+                    size = params[i + 1].split('@')[0]
+                    for mode in head['modes']:
+                        mode['current'] = (
+                            f'{mode["width"]}x{mode["height"]}' == size
+                        )
+                    i += 2
+                elif flag == '--pos':
+                    x, y = map(int, params[i + 1].split(','))
+                    head['position'] = {'x': x, 'y': y}
+                    i += 2
+                elif flag == '--scale':
+                    head['scale'] = float(params[i + 1])
+                    i += 2
+                elif flag == '--off':
+                    head['enabled'] = False
+                    for mode in head['modes']:
+                        mode['current'] = False
+                    i += 1
+                elif flag == '--on':
+                    # wlr-randr 0.4.1: enabled(false) clears the current
+                    # mode; --on calls fixup_disabled_head, choosing preferred.
+                    if not head['enabled']:
+                        for mode in head['modes']:
+                            mode['current'] = mode['preferred']
+                    head['enabled'] = True
+                    i += 1
+                else:
+                    raise AssertionError(params)
+        return subprocess.CompletedProcess(args, 0, stdout, '')
+
+    with (
+        mock.patch.dict(
+            'os.environ',
+            {'QT_QPA_PLATFORM': 'wayland', dm.CAGE_MIRRORING_ENV: '1'},
+        ),
+        mock.patch.object(viewer, '_mirror_applied', False),
+        mock.patch.object(viewer, 'display_blanked', False),
+        mock.patch.object(viewer, 'loop_is_stopped', False),
+        mock.patch.object(subprocess, 'run', side_effect=run),
+    ):
+        viewer._ensure_display_mirroring()
+        assert viewer._mirror_applied
+        assert [
+            o.current.width for o in dm.parse_outputs(json.dumps(heads))
+        ] == [1920, 1920]
+        viewer.blank_display()
+        viewer.unblank_display()
+        viewer._ensure_display_mirroring()
+        widths = [
+            o.current.width / o.scale
+            for o in dm.parse_outputs(json.dumps(heads))
+        ]
+        assert widths[0] == widths[1], f'Canvas widths after unblank: {widths}'

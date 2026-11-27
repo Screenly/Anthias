@@ -874,9 +874,12 @@ def blank_display() -> None:
 
 def unblank_display() -> None:
     """Handle the ``unblank`` command: power the display back on and resume."""
-    global display_blanked, loop_is_stopped
+    global display_blanked, loop_is_stopped, _mirror_applied
     if _is_wayland_board():
         _apply_wlr_power(True)
+        # --on restores preferred modes, which may differ from the common
+        # mode selected for mirroring. Reapply on the main thread.
+        _mirror_applied = False
     display_blanked = False
     loop_is_stopped = False
     get_skip_event().set()
@@ -2440,7 +2443,7 @@ def _maybe_restart_for_mirroring() -> None:
     Cage picks which outputs it drives (``-m last`` or ``-m extend``)
     only at startup, so the setting can't be applied live. Runs on the
     subscriber thread, so it only raises the flag that
-    ``_consume_pending_compositor_restart`` acts on in asset_loop.
+    ``_consume_pending_compositor_restart`` acts on in start_loop.
     """
     global _compositor_restart_pending
     if not _is_wayland_board():
@@ -3062,10 +3065,6 @@ def asset_loop(scheduler: Any) -> None:
     # respawn via load_browser() with the updated rotation env.
     _consume_pending_rotation_bounce()
 
-    # Toggling display mirroring needs a fresh cage; exit for it here,
-    # on the thread that owns the asset loop.
-    _consume_pending_compositor_restart()
-
     # Push the mirrored layout if the attempt in load_browser() raced
     # cage's startup. No-op once applied or when mirroring is off.
     _ensure_display_mirroring()
@@ -3315,6 +3314,9 @@ def start_loop() -> None:
 
     logger.debug('Entering infinite loop.')
     while True:
+        # Settings changes must restart cage even while playback is paused
+        # or blanked, when asset_loop is not called.
+        _consume_pending_compositor_restart()
         if loop_is_stopped:
             # Paint black once from the main thread (the owner of the
             # webview / current_browser_url). Guard on the URL so we
