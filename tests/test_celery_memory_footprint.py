@@ -86,7 +86,7 @@ def test_worker_import_does_not_load_the_pki_stack() -> None:
         'import sys, django\n'
         'django.setup()\n'
         'import anthias_server.celery_tasks\n'
-        "heavy = sorted(m for m in sys.modules if m.startswith(\n"
+        'heavy = sorted(m for m in sys.modules if m.startswith(\n'
         "    ('cryptography.hazmat', 'cryptography.x509',\n"
         "     'cryptography.fernet')))\n"
         'print(heavy)\n'
