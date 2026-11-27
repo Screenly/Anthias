@@ -17,7 +17,15 @@
   <form
     method="post"
     action="{% url 'anthias_app:settings_save' %}"
-    x-data="{ authBackend: '{{ auth_backend }}' }"
+    x-data="{
+      authBackend: '{{ auth_backend }}',
+      mirroring: {{ display_mirroring|yesno:'true,false' }},
+      mirroringSaved: {{ display_mirroring|yesno:'true,false' }},
+      mirroringConfirmed: false,
+      confirmMirroring: false,
+    }"
+    @change="if ($event.target.name === 'display_mirroring') mirroring = $event.target.checked"
+    @submit="if (mirroring !== mirroringSaved && !mirroringConfirmed) { $event.preventDefault(); confirmMirroring = true }"
     class="settings-stack"
   >
     {% csrf_token %}
@@ -102,7 +110,7 @@
         {% include "_settings_toggle.html" with name="shuffle_playlist" label="Shuffle playlist" hint="Randomise the play order on every loop." checked=shuffle_playlist %}
         {% include "_settings_toggle.html" with name="skip_deactivated_asset" label="Skip asset when it leaves the playlist" hint="Take an asset off the screen the moment it is disabled or its schedule ends, instead of letting it finish the rotation it already started. Deleted assets always come off immediately." checked=skip_deactivated_asset %}
         {% if supports_display_mirroring %}
-        {% include "_settings_toggle.html" with name="display_mirroring" label="Mirror to all displays" hint="Show the same content on every connected screen, such as both HDMI ports on a Raspberry Pi 5. Connect the screens before the device starts. Changing this restarts the display." checked=display_mirroring %}
+        {% include "_settings_toggle.html" with name="display_mirroring" label="Mirror to all displays" hint="Show the same content on every connected screen, such as both HDMI ports on a Raspberry Pi 5. Connect the screens before the device starts, or restart the device after plugging one in. Saving a change restarts the display after you confirm." checked=display_mirroring %}
         {% endif %}
         {% include "_settings_toggle.html" with name="prefer_dark_mode" label="Prefer dark mode" hint="Ask web page assets to render in dark mode where they support it." checked=prefer_dark_mode %}
         {% include "_settings_toggle.html" with name="use_24_hour_clock" label="Use 24-hour clock" hint="Display times in 24-hour format across the UI." checked=use_24_hour_clock %}
@@ -240,6 +248,43 @@
         <i class="ti ti-check"></i><span>Save settings</span>
       </button>
     </div>
+
+    {% if supports_display_mirroring %}
+    {% comment %}
+      Cage only picks which outputs it drives when it starts, so saving a
+      changed "Mirror to all displays" restarts the display. Ask first,
+      the same way Reboot and Shutdown do.
+    {% endcomment %}
+    <div
+      x-show="confirmMirroring"
+      x-cloak
+      x-trap="confirmMirroring"
+      class="modal-overlay"
+      @keydown.escape.window="confirmMirroring = false"
+      @click.self="confirmMirroring = false"
+    >
+      <div class="modal-card modal-card--sm" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="mirroring-modal-title">
+        <div class="modal-card__header">
+          <h2 id="mirroring-modal-title" x-text="mirroring ? 'Turn on mirroring?' : 'Turn off mirroring?'">Turn on mirroring?</h2>
+          <button type="button" class="modal-card__close" @click="confirmMirroring = false" aria-label="Close">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+        <div class="modal-card__body">
+          <p class="m-0">The display restarts to apply this. The screen goes dark for a few seconds, then playback resumes.</p>
+        </div>
+        <div class="modal-card__footer">
+          <button type="button" class="app-btn app-btn-link" @click="confirmMirroring = false">Cancel</button>
+          <button
+            type="button"
+            id="btn-mirroring-confirm"
+            class="app-btn app-btn-primary"
+            @click="mirroringConfirmed = true; confirmMirroring = false; $nextTick(() => $root.requestSubmit())"
+          >Save and restart display</button>
+        </div>
+      </div>
+    </div>
+    {% endif %}
   </form>
 
   <div id="upgrade-section"></div>

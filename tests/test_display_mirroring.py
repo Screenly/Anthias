@@ -342,3 +342,58 @@ def test_reload_never_restarts_non_wayland_boards() -> None:
     ):
         viewer._maybe_restart_for_mirroring()
     assert viewer._compositor_restart_pending is False
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ('device_type', 'shown'), [('pi5', True), ('x86', True), ('pi4-64', False)]
+)
+def test_settings_page_offers_mirroring_only_on_cage_boards(
+    device_type: str, shown: bool
+) -> None:
+    from django.test import Client
+    from django.urls import reverse
+
+    with (
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': device_type}),
+        mock.patch.dict(settings, {'auth_backend': ''}),
+    ):
+        html = Client().get(reverse('anthias_app:settings')).content
+    assert (b'id="display_mirroring"' in html) is shown
+    # The save-time confirmation ships with the toggle and never without.
+    assert (b'id="btn-mirroring-confirm"' in html) is shown
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ('device_type', 'posted', 'expected'),
+    [('pi5', 'true', True), ('pi4-64', 'true', False)],
+)
+def test_settings_save_ignores_mirroring_on_other_boards(
+    device_type: str, posted: str, expected: bool
+) -> None:
+    from django.test import Client
+    from django.urls import reverse
+
+    with (
+        mock.patch.dict(os.environ, {'DEVICE_TYPE': device_type}),
+        mock.patch.dict(
+            settings, {'auth_backend': '', 'display_mirroring': False}
+        ),
+        mock.patch.object(settings, 'save'),
+        mock.patch('anthias_server.app.views.ViewerPublisher.get_instance'),
+    ):
+        Client().post(
+            reverse('anthias_app:settings_save'),
+            {
+                'player_name': 'Lobby',
+                'default_duration': '10',
+                'default_streaming_duration': '300',
+                'audio_output': 'hdmi',
+                'date_format': 'mm/dd/yyyy',
+                'auth_backend': '',
+                'screen_rotation': '0',
+                'display_mirroring': posted,
+            },
+        )
+        assert settings['display_mirroring'] is expected
