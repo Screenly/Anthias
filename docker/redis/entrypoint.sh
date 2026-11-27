@@ -45,6 +45,24 @@ aof_is_valid() {
     redis-check-aof "$manifest" >/dev/null 2>&1
 }
 
+seed_aof() {
+    snapshot="$data_dir/dump.rdb"
+    if [ -f "$snapshot" ] && redis-check-rdb "$snapshot" >/dev/null 2>&1; then
+        # Publish the manifest only after the base is complete. Until then,
+        # the quarantined directory lets the next boot resume this recovery.
+        if ! mkdir -p "$aof_dir" ||
+           ! cp "$snapshot" "$aof_dir/appendonly.aof.1.base.rdb" ||
+           ! printf 'file appendonly.aof.1.base.rdb seq 1 type b\n' > "$manifest.recovery" ||
+           ! mv "$manifest.recovery" "$manifest"; then
+            log 'could not rebuild the append-only file from the snapshot'
+            return 1
+        fi
+        log 'rebuilt the append-only file from the last RDB snapshot'
+    else
+        log 'no usable RDB snapshot; starting with an empty dataset'
+    fi
+}
+
 recover_aof() {
     log 'the append-only file is damaged; truncating it at the first bad record'
     echo y | redis-check-aof --fix "$manifest" >/dev/null 2>&1
@@ -54,22 +72,18 @@ recover_aof() {
     fi
 
     log 'could not repair the append-only file; moving it aside'
-    rm -rf "$aof_dir.corrupt"
-    mv "$aof_dir" "$aof_dir.corrupt"
-
-    snapshot="$data_dir/dump.rdb"
-    if [ -f "$snapshot" ] && redis-check-rdb "$snapshot" >/dev/null 2>&1; then
-        mkdir -p "$aof_dir"
-        cp "$snapshot" "$aof_dir/appendonly.aof.1.base.rdb"
-        printf 'file appendonly.aof.1.base.rdb seq 1 type b\n' > "$manifest"
-        log 'rebuilt the append-only file from the last RDB snapshot'
-    else
-        log 'no usable RDB snapshot; starting with an empty dataset'
+    if ! rm -rf "$aof_dir.corrupt" || ! mv "$aof_dir" "$aof_dir.corrupt"; then
+        log 'could not move the damaged append-only file aside'
+        return 1
     fi
+    seed_aof
 }
 
 if [ -f "$manifest" ] && ! aof_is_valid; then
-    recover_aof
+    recover_aof || exit 1
+elif [ ! -f "$manifest" ] && [ -d "$aof_dir.corrupt" ]; then
+    log 'resuming an interrupted append-only file recovery'
+    seed_aof || exit 1
 fi
 
 exec "$@"

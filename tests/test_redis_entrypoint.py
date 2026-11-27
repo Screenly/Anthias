@@ -181,6 +181,29 @@ def test_only_the_latest_corrupt_copy_is_kept(tmp_path: Path) -> None:
     assert (tmp_path / 'appendonlydir.corrupt' / MANIFEST).exists()
 
 
+@requires_redis_tools
+@pytest.mark.parametrize('partial_seed', [False, True])
+def test_snapshot_recovery_resumes_after_a_power_cut(
+    tmp_path: Path, partial_seed: bool
+) -> None:
+    snapshot = _rdb(b'device_id', b'dev42')
+    (tmp_path / 'dump.rdb').write_bytes(snapshot)
+    aof_dir = _write_aof(tmp_path, b'REDIS0009\xff\xff\xff\xff', LATER)
+    aof_dir.rename(tmp_path / 'appendonlydir.corrupt')
+    if partial_seed:
+        aof_dir.mkdir()
+        (aof_dir / 'appendonly.aof.1.base.rdb').write_bytes(b'REDIS0009')
+        (aof_dir / f'{MANIFEST}.recovery').write_text('file appendonly')
+
+    result = _run(tmp_path)
+
+    assert result.returncode == 0
+    assert _aof_is_valid(aof_dir)
+    assert (aof_dir / 'appendonly.aof.1.base.rdb').read_bytes() == snapshot
+    assert (tmp_path / 'appendonlydir.corrupt' / MANIFEST).exists()
+    assert not (aof_dir / f'{MANIFEST}.recovery').exists()
+
+
 def test_a_first_start_with_no_aof_is_a_no_op(tmp_path: Path) -> None:
     result = _run(tmp_path)
 
