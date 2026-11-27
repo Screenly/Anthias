@@ -153,10 +153,12 @@ def get_test_context() -> dict[str, Any]:
     # apt packages it actually needs (the list shifts between Chromium
     # builds, so leaving it to playwright avoids stale apt names that
     # Debian eventually retires). The test image otherwise inherits all
-    # tooling from the base image (curl, ca-certificates, etc.), so the
-    # apt list here is empty.
+    # tooling from the base image (curl, ca-certificates, etc.).
+    # redis-tools brings redis-check-aof and redis-check-rdb, which
+    # tests/test_redis_entrypoint.py drives the Redis image's
+    # AOF-recovery entrypoint against.
     return {
-        'apt_dependencies': [],
+        'apt_dependencies': ['redis-tools'],
     }
 
 
