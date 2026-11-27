@@ -160,6 +160,24 @@ def get_total_mem_kb() -> int | None:
 LOW_RAM_THRESHOLD_KB = 1_572_864  # 1.5 GiB in kibibytes
 
 
+def read_mem_total_kb(path: str = '/proc/meminfo') -> int | None:
+    """Return ``MemTotal`` (kibibytes) read straight from ``path``.
+
+    For callers that cannot wait for the host agent, or run where
+    there is none (balena): ``/proc/meminfo`` is not namespaced, so a
+    container reads the host's total from it. ``None`` when the file
+    is missing or has no parseable ``MemTotal`` line.
+    """
+    try:
+        with open(path) as meminfo:
+            for line in meminfo:
+                if line.startswith('MemTotal:'):
+                    return int(line.split()[1])
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
 def is_low_ram_device() -> bool:
     """``True`` when the host has less than ``LOW_RAM_THRESHOLD_KB``.
 
