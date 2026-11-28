@@ -61,6 +61,7 @@ from django.utils import timezone
 from anthias_server.lib import pki
 
 from .ca import CaError
+from .mode import controller_enabled
 from .models import Node, NodeStatus
 
 logger = logging.getLogger(__name__)
@@ -196,7 +197,7 @@ def _attach(
     """
     from . import service
 
-    if not service.controller_enabled():
+    if not controller_enabled():
         return None
     node = _screen_for(cert)
     if node is None or cert is None:

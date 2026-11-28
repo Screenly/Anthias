@@ -48,15 +48,6 @@ COMMAND_ICONS = {
 }
 
 
-def controller_enabled() -> bool:
-    from anthias_server.settings import settings
-
-    # Re-read: the toggle is saved by the web process, and this also
-    # runs in the Celery worker.
-    settings.load()
-    return bool(settings['controller_mode']) and bool(settings['auth_backend'])
-
-
 def controller_name(host: str = '') -> str:
     """The name screens show for this controller.
 

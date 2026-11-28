@@ -39,6 +39,11 @@ if not _django_apps.apps_ready:
 
 # Place imports that uses Django in this block.
 
+from anthias_common.board import (
+    LOW_RAM_THRESHOLD_KB,
+    get_total_mem_kb,
+    read_mem_total_kb,
+)
 from anthias_common.utils import (
     STAGED_UPLOAD_DIR,
     STAGED_UPLOAD_MAX_AGE_MIN,
@@ -90,6 +95,46 @@ celery = Celery(
     result_expires=CELERY_TASK_RESULT_EXPIRES,
     # Controller-mode fan-out tasks live with the controller app.
     include=['anthias_server.controller.tasks'],
+)
+
+# Pool size on a board below ``LOW_RAM_THRESHOLD_KB``. Celery's default
+# is one prefork child per core, and every child carries the whole
+# Django app (about 90 MB on a 64-bit Pi). On a 1 GB Pi 3 the four of
+# them, beat and the parent took about 600 MB, which left QtWebEngine
+# nothing: the kernel OOM-killed the viewer and every respawn then
+# stalled paging its own code back in, so the screen never came up.
+# Two keeps a long download from holding up the once-a-minute
+# housekeeping tasks while giving the viewer back two children's worth.
+LOW_RAM_WORKER_CONCURRENCY = 2
+# A child above this (kibibytes) is replaced after its current task,
+# so one large image or video probe cannot keep the memory it grew to.
+LOW_RAM_WORKER_MAX_MEMORY_PER_CHILD_KB = 200_000
+
+
+def low_ram_worker_settings(
+    total_kb: int | None,
+) -> dict[str, int]:
+    """Celery worker settings for a host with ``total_kb`` of RAM.
+
+    Empty when the host is not low on RAM, or when its size is
+    unknown: Celery's own defaults then apply.
+    """
+    if total_kb is None or total_kb >= LOW_RAM_THRESHOLD_KB:
+        return {}
+    return {
+        'worker_concurrency': LOW_RAM_WORKER_CONCURRENCY,
+        'worker_max_memory_per_child': (
+            LOW_RAM_WORKER_MAX_MEMORY_PER_CHILD_KB
+        ),
+    }
+
+
+# Read here, not from the host agent's Redis key: the worker sizes its
+# pool before it would have a reason to wait for Redis, and balena runs
+# no host agent at all. A ``--concurrency`` on the command line still
+# wins over this.
+celery.conf.update(
+    low_ram_worker_settings(read_mem_total_kb() or get_total_mem_kb())
 )
 
 

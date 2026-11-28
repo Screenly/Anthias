@@ -30,6 +30,8 @@ than mounting ``~/.anthias`` into Caddy: Caddy only ever sees the
 certificate and key it is serving.
 """
 
+from __future__ import annotations
+
 import fcntl
 import http.client
 import json
@@ -43,9 +45,15 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from anthias_server.lib import node_identity, web_certificate
+# ``node_identity`` and ``web_certificate`` pull in ``cryptography``
+# (about 15 MB per process on a 64-bit Pi). Every uvicorn and celery
+# process imports this module at startup to register the m2m site
+# provider, so they are imported where a config is actually rendered
+# or applied rather than here.
+if TYPE_CHECKING:
+    from anthias_server.lib import web_certificate
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +232,8 @@ def _http_server(http_port: int) -> dict[str, Any]:
 def _https_server(
     https_port: int, state: web_certificate.WebTlsState, web_tag: str
 ) -> dict[str, Any]:
+    from anthias_server.lib import web_certificate
+
     policies: list[dict[str, Any]] = []
     if state.mode == web_certificate.MODE_ACME:
         policies.append({'match': {'sni': [state.domain]}})
@@ -260,6 +270,8 @@ def build_config(
     Certificate paths point into :func:`certs_dir` as seen from inside
     the Caddy container; :func:`stage_certificates` puts them there.
     """
+    from anthias_server.lib import web_certificate
+
     state = state or web_certificate.load_state()
     node_cert = str(certs_dir() / 'node.crt')
     node_key = str(certs_dir() / 'node.key')
@@ -336,6 +348,8 @@ def _copy_private(src: Path, dst: Path, mode: int) -> None:
 
 def stage_certificates(state: web_certificate.WebTlsState) -> None:
     """Copy the certificates Caddy needs into the shared volume."""
+    from anthias_server.lib import node_identity, web_certificate
+
     identity = node_identity.ensure_node_identity()
     certs_dir().mkdir(parents=True, exist_ok=True)
     os.chmod(certs_dir(), 0o700)
@@ -461,6 +475,8 @@ def apply() -> ApplyResult:
     :class:`CaddyConfigError` when it rejects the config, in which
     case Caddy keeps serving the previous one.
     """
+    from anthias_server.lib import web_certificate
+
     with _config_lock():
         state = web_certificate.load_state()
         stage_certificates(state)
@@ -485,6 +501,8 @@ def apply_change(change: Callable[[], None]) -> ApplyResult:
     The whole sequence runs under one lock, so two changes (two browser
     tabs, or the UI and the CLI) cannot roll back each other's files.
     """
+    from anthias_server.lib import web_certificate
+
     with _config_lock():
         saved = web_certificate.snapshot()
         try:
@@ -510,6 +528,8 @@ def apply_on_startup(
     retries for a couple of minutes. A rejected config is not retried:
     it will not get better by waiting.
     """
+    from anthias_server.lib import web_certificate
+
     try:
         web_certificate.migrate_legacy_layout()
     except Exception:

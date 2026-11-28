@@ -17,6 +17,7 @@ from anthias_server.app.helpers import template
 from anthias_server.controller import join, service, tasks
 from anthias_server.controller.client import NodeError
 from anthias_server.controller.mirror import build_manifest
+from anthias_server.controller.mode import controller_enabled
 from anthias_server.controller.models import (
     AuditEntry,
     JoinRequest,
@@ -73,7 +74,7 @@ def _page_context(request: HttpRequest) -> dict[str, Any]:
         'active_nav': 'screens',
         'controller_mode': bool(settings['controller_mode']),
         'auth_enabled': bool(settings['auth_backend']),
-        'controller_enabled': service.controller_enabled(),
+        'controller_enabled': controller_enabled(),
     }
     if not context['controller_enabled']:
         return context
@@ -109,7 +110,7 @@ def screens(request: HttpRequest) -> HttpResponse:
 @authorized
 @require_http_methods(['GET'])
 def screens_table(request: HttpRequest) -> HttpResponse:
-    if not service.controller_enabled():
+    if not controller_enabled():
         return HttpResponse(status=204)
     return template(
         request, 'controller/_screens_table.html', _nodes_context()
@@ -119,7 +120,7 @@ def screens_table(request: HttpRequest) -> HttpResponse:
 @authorized
 @require_http_methods(['GET'])
 def screens_activity(request: HttpRequest) -> HttpResponse:
-    if not service.controller_enabled():
+    if not controller_enabled():
         return HttpResponse(status=204)
     return template(
         request,
@@ -133,7 +134,7 @@ def _back(request: HttpRequest) -> HttpResponse:
 
 
 def _require_enabled(request: HttpRequest) -> HttpResponse | None:
-    if service.controller_enabled():
+    if controller_enabled():
         return None
     messages.error(request, 'Controller mode is off.')
     return _back(request)

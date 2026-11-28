@@ -86,7 +86,7 @@ def _multi_screen_role() -> tuple[bool, bool]:
     telemetry must never crash the worker.
     """
     try:
-        from anthias_server.controller.service import controller_enabled
+        from anthias_server.controller.mode import controller_enabled
         from anthias_server.lib.management import is_managed
 
         return controller_enabled(), is_managed()

@@ -19,6 +19,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from anthias_server.controller import join, service
+from anthias_server.controller.mode import controller_enabled
 from anthias_server.lib import management
 
 logger = logging.getLogger(__name__)
@@ -72,10 +73,7 @@ class ControllerJoinView(APIView):
         },
     )
     def post(self, request: Request) -> Response:
-        if (
-            not management.request_via_m2m(request)
-            or not service.controller_enabled()
-        ):
+        if not management.request_via_m2m(request) or not controller_enabled():
             return Response(
                 {'detail': 'This device is not accepting screens.'},
                 status=status.HTTP_404_NOT_FOUND,
