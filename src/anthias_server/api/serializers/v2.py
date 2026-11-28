@@ -433,6 +433,7 @@ class DeviceSettingsSerializerV2(Serializer[Any]):
     use_24_hour_clock = BooleanField()
     debug_logging = BooleanField()
     prefer_dark_mode = BooleanField()
+    display_mirroring = BooleanField()
     verify_ssl = BooleanField()
     # Mirror the PATCH-side ChoiceField so the OpenAPI schema
     # advertises the same enum on both directions — clients can rely
@@ -475,6 +476,7 @@ class UpdateDeviceSettingsSerializerV2(Serializer[Any]):
     use_24_hour_clock = BooleanField(required=False)
     debug_logging = BooleanField(required=False)
     prefer_dark_mode = BooleanField(required=False)
+    display_mirroring = BooleanField(required=False)
     verify_ssl = BooleanField(required=False)
     screen_rotation = ChoiceField(
         required=False, choices=SCREEN_ROTATION_CHOICES

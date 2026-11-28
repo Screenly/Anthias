@@ -33,6 +33,7 @@ from django.utils.http import (
 )
 from django.views.decorators.http import require_http_methods
 
+from anthias_common.board import supports_display_mirroring
 from anthias_common.paths import PathOutsideBaseError, resolve_within
 from anthias_common.utils import (
     DISK_FULL_ERROR,
@@ -2340,6 +2341,10 @@ def settings_save(request: HttpRequest) -> HttpResponse:
             request, 'skip_deactivated_asset'
         )
         settings['prefer_dark_mode'] = _checkbox(request, 'prefer_dark_mode')
+        if supports_display_mirroring():
+            settings['display_mirroring'] = _checkbox(
+                request, 'display_mirroring'
+            )
         settings['use_24_hour_clock'] = _checkbox(request, 'use_24_hour_clock')
         settings['debug_logging'] = _checkbox(request, 'debug_logging')
         settings['verify_ssl'] = _checkbox(request, 'verify_ssl')

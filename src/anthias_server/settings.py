@@ -86,6 +86,11 @@ DEFAULTS = {
         'debug_logging': False,
         'default_duration': 10,
         'default_streaming_duration': '300',
+        # Show the same picture on every connected display (Pi 5, x86
+        # and generic arm64, the boards that run the cage compositor).
+        # Off keeps the single-output behaviour, where a display on the
+        # second port stays dark.
+        'display_mirroring': False,
         'player_name': '',
         'prefer_dark_mode': False,
         'resolution': '1920x1080',

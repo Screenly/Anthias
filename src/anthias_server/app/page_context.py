@@ -23,7 +23,10 @@ from anthias_common import (
     storage_health,
     undervoltage,
 )
-from anthias_common.board import LOW_RAM_THRESHOLD_KB
+from anthias_common.board import (
+    LOW_RAM_THRESHOLD_KB,
+    supports_display_mirroring,
+)
 from anthias_common.utils import (
     clamp_screen_rotation,
     connect_to_redis,
@@ -632,6 +635,8 @@ def device_settings() -> dict[str, Any]:
         'use_24_hour_clock': settings['use_24_hour_clock'],
         'debug_logging': settings['debug_logging'],
         'prefer_dark_mode': settings['prefer_dark_mode'],
+        'display_mirroring': settings['display_mirroring'],
+        'supports_display_mirroring': supports_display_mirroring(),
         'verify_ssl': settings['verify_ssl'],
         'controller_mode': settings['controller_mode'],
         # Clamp on the read side so a stale conf value (e.g. an

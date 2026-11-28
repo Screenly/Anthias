@@ -4,6 +4,27 @@
 # and launch for x86 / arm64 / pi5, sourced by bin/start_viewer.sh.
 # Function definition only. Moved verbatim from start_viewer.sh.
 
+# Print 1 when the operator turned on display mirroring, else 0. Reads
+# anthias.conf with configparser rather than importing
+# anthias_server.settings, which writes a default config when the file
+# is missing and this runs as root. Parses booleans the same way the
+# viewer does (getboolean), so both sides always agree on the mode and
+# a mismatch can't restart the viewer in a loop.
+display_mirroring_setting() {
+    /venv/bin/python - "${HOME}/.anthias/anthias.conf" <<'PY' 2>/dev/null || echo 0
+import configparser
+import sys
+
+config = configparser.ConfigParser()
+config.read(sys.argv[1])
+try:
+    enabled = config.getboolean('viewer', 'display_mirroring')
+except (configparser.Error, ValueError):
+    enabled = False
+print(1 if enabled else 0)
+PY
+}
+
 launch_wayland() {
     # libseat's default `logind` backend D-Buses into systemd-logind to
     # acquire a session, but containers have no logind session — cage
@@ -50,9 +71,23 @@ launch_wayland() {
     # connector came up most recently — for the boot-time case
     # (which the kernel detects in enumeration order) that's the
     # last connected output rather than the first. Good enough for
-    # the single-display kiosk path; dual-head signage is a separate
-    # workflow.
-    cage_mode=(-m last)
+    # the single-display kiosk path.
+    #
+    # Display mirroring (Settings > "Mirror to all displays") needs
+    # every output enabled, so it launches with `-m extend` and the
+    # viewer then stacks all outputs at the same layout origin with
+    # wlr-randr (src/anthias_viewer/display_mirroring.py). Because
+    # they overlap, a disconnected connector in the layout is harmless
+    # there. The viewer reads ANTHIAS_CAGE_MIRRORING to know which mode
+    # this cage runs in, and exits to get a fresh cage when the
+    # setting changes.
+    if [ "$(display_mirroring_setting)" = 1 ]; then
+        cage_mode=(-m extend)
+        export ANTHIAS_CAGE_MIRRORING=1
+    else
+        cage_mode=(-m last)
+        export ANTHIAS_CAGE_MIRRORING=0
+    fi
 
     # Self-heal a headless-boot display wedge on cage (Pi 5 vc4 in
     # particular). When the container restarts *from* a state where cage
@@ -126,7 +161,7 @@ launch_wayland() {
     cage "${cage_mode[@]}" -- bash -c '
         chown viewer "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" 2>/dev/null || true
         exec sudo \
-            --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH,WAYLAND_DISPLAY,LANG,LANGUAGE,LC_ALL \
+            --preserve-env=XDG_RUNTIME_DIR,QT_SCALE_FACTOR,PYTHONPATH,WAYLAND_DISPLAY,ANTHIAS_CAGE_MIRRORING,LANG,LANGUAGE,LC_ALL \
             -E -u viewer \
             dbus-run-session /venv/bin/python -m anthias_viewer
     ' &

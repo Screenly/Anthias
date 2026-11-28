@@ -35,6 +35,7 @@ from anthias_common.board import is_low_ram_device
 from anthias_common.http import get_anthias_product_token
 from anthias_server.lib import cec, cec_client
 from anthias_server.settings import LISTEN, PORT, ReplySender, settings
+from anthias_viewer import display_mirroring
 from anthias_viewer import media_player as _media_player_module
 from anthias_viewer.constants import BLACK_SCREEN as BLACK_SCREEN
 from anthias_viewer.constants import (
@@ -189,6 +190,16 @@ _last_applied_rotation: int = 0
 # respawned to pick up the new ANTHIAS_PREFER_DARK_MODE env var. Latched
 # at each spawn in ``load_browser``.
 _last_applied_dark_mode: bool = False
+
+# Display mirroring on Wayland boards (see display_mirroring). Cage has
+# to be launched in ``-m extend`` for it, so the mode is fixed per
+# compositor run: ``_mirror_applied`` tracks whether the overlapping
+# layout has been pushed to this cage yet (retried every asset_loop
+# tick until it lands), and ``_compositor_restart_pending`` is the
+# subscriber -> main-thread handoff when the operator toggles the
+# setting and cage must be relaunched in the other mode.
+_mirror_applied: bool = False
+_compositor_restart_pending: bool = False
 
 # Cross-thread handoff for the linuxfb rotation-change path. The
 # subscriber thread (ViewerSubscriber) runs _handle_reload when a
@@ -863,9 +874,12 @@ def blank_display() -> None:
 
 def unblank_display() -> None:
     """Handle the ``unblank`` command: power the display back on and resume."""
-    global display_blanked, loop_is_stopped
+    global display_blanked, loop_is_stopped, _mirror_applied
     if _is_wayland_board():
         _apply_wlr_power(True)
+        # --on restores preferred modes, which may differ from the common
+        # mode selected for mirroring. Reapply on the main thread.
+        _mirror_applied = False
     display_blanked = False
     loop_is_stopped = False
     get_skip_event().set()
@@ -1721,6 +1735,7 @@ def load_browser(
     # latch when at least one output rotation actually succeeded —
     # otherwise an early-boot cage-not-ready failure would silently
     # stick at the unrotated state until a setting change.
+    _ensure_display_mirroring()
     rotation = _rotation_value()
     if _is_wayland_board():
         if _apply_wlr_transform(rotation):
@@ -2272,6 +2287,7 @@ def _handle_reload() -> None:
     asset has been deleted or deactivated — issue #2430.
     """
     load_settings()
+    _maybe_restart_for_mirroring()
     _maybe_reapply_rotation()
     _maybe_reapply_dark_mode()
     _skip_if_current_asset_inactive()
@@ -2401,6 +2417,57 @@ def _maybe_reapply_dark_mode() -> None:
     _last_applied_dark_mode = prefer_dark
     _rotation_bounce_pending = True
     get_skip_event().set()
+
+
+def _cage_mirroring() -> bool:
+    """Whether cage was launched for mirroring (``-m extend``)."""
+    return os.environ.get(display_mirroring.CAGE_MIRRORING_ENV) == '1'
+
+
+def _ensure_display_mirroring() -> None:
+    """Overlay every output once per cage run when mirroring is on.
+
+    Main thread only (load_browser and each asset_loop tick). Cheap
+    once applied; until then it retries, since cage may not be
+    answering wlr-randr yet at viewer startup.
+    """
+    global _mirror_applied
+    if _mirror_applied or not _is_wayland_board() or not _cage_mirroring():
+        return
+    _mirror_applied = display_mirroring.apply_mirror()
+
+
+def _maybe_restart_for_mirroring() -> None:
+    """Relaunch cage when the operator toggled display mirroring.
+
+    Cage picks which outputs it drives (``-m last`` or ``-m extend``)
+    only at startup, so the setting can't be applied live. Runs on the
+    subscriber thread, so it only raises the flag that
+    ``_consume_pending_compositor_restart`` acts on in start_loop.
+    """
+    global _compositor_restart_pending
+    if not _is_wayland_board():
+        return
+    if bool(settings['display_mirroring']) == _cage_mirroring():
+        return
+    _compositor_restart_pending = True
+    get_skip_event().set()
+
+
+def _consume_pending_compositor_restart() -> None:
+    """Exit so the container restarts cage in the new mirroring mode.
+
+    The viewer is cage's child, so its exit ends cage and the
+    container's ``restart: always`` policy runs start_viewer.sh again,
+    which reads the new setting before launching cage.
+    """
+    if not _compositor_restart_pending:
+        return
+    logger.warning(
+        'Display mirroring turned %s; restarting the compositor to apply.',
+        'on' if settings['display_mirroring'] else 'off',
+    )
+    sys.exit(0)
 
 
 def _retry_wayland_rotation_if_pending() -> None:
@@ -2998,6 +3065,10 @@ def asset_loop(scheduler: Any) -> None:
     # respawn via load_browser() with the updated rotation env.
     _consume_pending_rotation_bounce()
 
+    # Push the mirrored layout if the attempt in load_browser() raced
+    # cage's startup. No-op once applied or when mirroring is off.
+    _ensure_display_mirroring()
+
     # Issue #2856 — and retry the Wayland rotation if the boot-time
     # attempt in load_browser() raced cage's wayland-socket setup.
     # Cheap early-return when nothing's pending.
@@ -3243,6 +3314,9 @@ def start_loop() -> None:
 
     logger.debug('Entering infinite loop.')
     while True:
+        # Settings changes must restart cage even while playback is paused
+        # or blanked, when asset_loop is not called.
+        _consume_pending_compositor_restart()
         if loop_is_stopped:
             # Paint black once from the main thread (the owner of the
             # webview / current_browser_url). Guard on the URL so we

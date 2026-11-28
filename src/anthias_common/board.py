@@ -46,6 +46,16 @@ from anthias_common.utils import connect_to_redis
 # path.
 ARM64_DEVICE_TYPES = frozenset({'arm64', 'generic-arm64'})
 
+# DEVICE_TYPE values whose viewer runs under the cage Wayland
+# compositor (the ``case`` in bin/start_viewer.sh). Only these can
+# drive more than one display, so only they offer display mirroring.
+CAGE_DEVICE_TYPES = frozenset({'x86', 'arm64', 'pi5'})
+
+
+def supports_display_mirroring() -> bool:
+    """True on boards that can mirror to every connected display."""
+    return os.environ.get('DEVICE_TYPE', '').strip() in CAGE_DEVICE_TYPES
+
 
 def _read_host_key(key: str) -> str:
     """Return a ``host:*`` fact from Redis as text, ``''`` when absent.
